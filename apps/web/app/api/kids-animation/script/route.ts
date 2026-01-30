@@ -12,6 +12,9 @@ import {
   ScriptRequestSchema,
   type ScriptResponse,
 } from '@/lib/api/kids-animation/types'
+import { getLogger } from '@/lib/logger'
+
+const logger = getLogger('kids-animation/script')
 
 interface AnchorPrompt {
   id: string
@@ -40,9 +43,10 @@ export const POST = createApiHandler<ScriptResponse>(
     const formFactorConfig = KIDS_FORM_FACTOR_PRESETS[formFactor]
     const styleConfig = KIDS_ANIMATION_STYLES[style]
 
-    // DEBUG: 입력된 스토리 구조 확인
-    console.log('[script] inputStory type:', typeof inputStory)
-    console.log('[script] inputStory keys:', inputStory ? Object.keys(inputStory) : 'null')
+    logger.debug('Input story received', {
+      type: typeof inputStory,
+      keys: inputStory ? Object.keys(inputStory) : null,
+    })
 
     // 스토리를 generateScript에 맞는 형식으로 변환
     // (flexible schema에서 KidsStory | KidsBasicStory로)
@@ -83,12 +87,12 @@ export const POST = createApiHandler<ScriptResponse>(
     // 배경: 환경 전용 (캐릭터 없이 배경만)
     const anchorPrompts: AnchorPrompt[] = []
 
-    // DEBUG: 스토리 구조 확인
-    console.log('[script] story keys:', Object.keys(story))
-    console.log('[script] has characters:', 'characters' in story)
-    console.log('[script] characters:', (story as KidsStory).characters)
-    console.log('[script] has setting:', 'setting' in story)
-    console.log('[script] setting:', (story as KidsStory).setting)
+    logger.debug('Story structure', {
+      keys: Object.keys(story),
+      hasCharacters: 'characters' in story,
+      characterCount: (story as KidsStory).characters?.length,
+      hasSetting: 'setting' in story,
+    })
 
     // 캐릭터 앵커 프롬프트 (Enhanced 스토리인 경우)
     if ('characters' in story && Array.isArray(story.characters)) {
@@ -110,9 +114,10 @@ export const POST = createApiHandler<ScriptResponse>(
       const locations = story.setting.mainLocations || []
       const visualDescriptions = story.setting.locationVisualDescriptions || []
 
-      // DEBUG: 배경 정보 확인
-      console.log('[script] locations:', locations)
-      console.log('[script] visualDescriptions:', visualDescriptions)
+      logger.debug('Background info', {
+        locationCount: locations.length,
+        descriptionCount: visualDescriptions.length,
+      })
 
       // 기본 변형 (locationVisualDescriptions가 없을 때 fallback)
       const fallbackVariations = [
@@ -136,9 +141,10 @@ export const POST = createApiHandler<ScriptResponse>(
       })
     }
 
-    // DEBUG: 최종 앵커 프롬프트 확인
-    console.log('[script] anchorPrompts count:', anchorPrompts.length)
-    console.log('[script] anchorPrompts:', anchorPrompts.map(a => ({ id: a.id, category: a.category, name: a.name })))
+    logger.debug('Anchor prompts generated', {
+      count: anchorPrompts.length,
+      anchors: anchorPrompts.map((a) => ({ id: a.id, category: a.category, name: a.name })),
+    })
 
     return {
       sessionId,

@@ -7,13 +7,20 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 
 export default function SignupPage() {
   return (
     <Suspense fallback={<SignupSkeleton />}>
-      <SignupForm />
+      <SignupFlow />
     </Suspense>
   )
 }
@@ -24,9 +31,7 @@ function SignupSkeleton() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">회원가입</CardTitle>
-          <CardDescription>
-            새 계정을 만들어 시작하세요
-          </CardDescription>
+          <CardDescription>새 계정을 만들어 시작하세요</CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center py-8">
           <Spinner size="lg" />
@@ -36,7 +41,115 @@ function SignupSkeleton() {
   )
 }
 
-function SignupForm() {
+function SignupFlow() {
+  const [inviteCodeVerified, setInviteCodeVerified] = useState(false)
+  const [verifiedCode, setVerifiedCode] = useState('')
+
+  if (!inviteCodeVerified) {
+    return (
+      <InviteCodeStep
+        onVerified={(code) => {
+          setVerifiedCode(code)
+          setInviteCodeVerified(true)
+        }}
+      />
+    )
+  }
+
+  return <SignupForm inviteCode={verifiedCode} />
+}
+
+function InviteCodeStep({ onVerified }: { onVerified: (code: string) => void }) {
+  const [code, setCode] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    if (!code.trim()) {
+      setError('초대 코드를 입력해주세요.')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const response = await fetch('/api/auth/verify-invite-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code.trim() }),
+      })
+
+      const data = await response.json()
+
+      if (!data.valid) {
+        setError(data.error || '유효하지 않은 초대 코드입니다.')
+        return
+      }
+
+      onVerified(code.trim())
+    } catch {
+      setError('서버 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">초대 코드 입력</CardTitle>
+          <CardDescription>
+            현재 베타 서비스 중입니다.
+            <br />
+            초대 코드가 있으시면 입력해주세요.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleVerify} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="inviteCode">초대 코드</Label>
+              <Input
+                id="inviteCode"
+                type="text"
+                placeholder="초대 코드를 입력하세요"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                className="text-center text-lg tracking-widest"
+                autoComplete="off"
+                required
+              />
+            </div>
+
+            {error && <p className="text-sm text-destructive text-center">{error}</p>}
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? <Spinner size="sm" /> : '확인'}
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="flex-col gap-2">
+          <p className="text-sm text-muted-foreground text-center">
+            초대 코드가 없으신가요?
+            <br />
+            관리자에게 문의해주세요.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            이미 계정이 있으신가요?{' '}
+            <Link href="/login" className="text-primary hover:underline">
+              로그인
+            </Link>
+          </p>
+        </CardFooter>
+      </Card>
+    </div>
+  )
+}
+
+function SignupForm({ inviteCode }: { inviteCode: string }) {
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirect') || '/studio'
   const supabase = createClient()
@@ -57,8 +170,24 @@ function SignupForm() {
       return
     }
 
-    if (password.length < 6) {
-      setError('비밀번호는 최소 6자 이상이어야 합니다.')
+    // 비밀번호 정책 검증 (최소 8자, 대소문자, 숫자 포함)
+    if (password.length < 8) {
+      setError('비밀번호는 최소 8자 이상이어야 합니다.')
+      return
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      setError('비밀번호에 대문자를 포함해야 합니다.')
+      return
+    }
+
+    if (!/[a-z]/.test(password)) {
+      setError('비밀번호에 소문자를 포함해야 합니다.')
+      return
+    }
+
+    if (!/[0-9]/.test(password)) {
+      setError('비밀번호에 숫자를 포함해야 합니다.')
       return
     }
 
@@ -70,6 +199,9 @@ function SignupForm() {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+          data: {
+            invite_code: inviteCode,
+          },
         },
       })
 
@@ -79,7 +211,7 @@ function SignupForm() {
       }
 
       setSuccess(true)
-    } catch (err) {
+    } catch {
       setError('회원가입 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
@@ -102,7 +234,7 @@ function SignupForm() {
         setError(error.message)
         setLoading(false)
       }
-    } catch (err) {
+    } catch {
       setError('Google 로그인 중 오류가 발생했습니다.')
       setLoading(false)
     }
@@ -115,8 +247,8 @@ function SignupForm() {
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">이메일 확인</CardTitle>
             <CardDescription>
-              {email}로 확인 이메일을 보냈습니다.
-              이메일의 링크를 클릭하여 회원가입을 완료하세요.
+              {email}로 확인 이메일을 보냈습니다. 이메일의 링크를 클릭하여 회원가입을
+              완료하세요.
             </CardDescription>
           </CardHeader>
           <CardFooter className="justify-center">
@@ -134,9 +266,7 @@ function SignupForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">회원가입</CardTitle>
-          <CardDescription>
-            새 계정을 만들어 시작하세요
-          </CardDescription>
+          <CardDescription>새 계정을 만들어 시작하세요</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button
@@ -176,9 +306,7 @@ function SignupForm() {
               <span className="w-full border-t" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                또는
-              </span>
+              <span className="bg-background px-2 text-muted-foreground">또는</span>
             </div>
           </div>
 
@@ -199,11 +327,14 @@ function SignupForm() {
               <Input
                 id="password"
                 type="password"
-                placeholder="최소 6자 이상"
+                placeholder="8자 이상, 대소문자 + 숫자"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                최소 8자, 대문자/소문자/숫자 포함
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">비밀번호 확인</Label>
@@ -217,9 +348,7 @@ function SignupForm() {
               />
             </div>
 
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Spinner size="sm" /> : '회원가입'}

@@ -20,9 +20,12 @@ import {
   KIDS_ZOOTOPIA_ACTS,
   KIDS_VOICE_PROFILES,
 } from '@vibe-media-lab/shared'
+import { getLogger } from '@/lib/logger'
 
 // Re-export ActKey for route.ts
 export type { ActKey }
+
+const logger = getLogger('llm-service')
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const IS_MOCK = !GEMINI_API_KEY
@@ -94,8 +97,12 @@ async function callGemini(prompt: string): Promise<string> {
 
   if (!response.ok) {
     const errorBody = await response.text()
-    console.error('Gemini API error response:', errorBody)
-    throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorBody}`)
+    logger.error('Gemini API request failed', {
+      status: response.status,
+      statusText: response.statusText,
+      errorBody: errorBody.slice(0, 500),
+    })
+    throw new Error(`Gemini API error: ${response.status} ${response.statusText}`)
   }
 
   const data = await response.json()
@@ -103,7 +110,10 @@ async function callGemini(prompt: string): Promise<string> {
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text
 
   if (!text) {
-    console.error('No text in Gemini response. Full data:', JSON.stringify(data))
+    logger.error('No text in Gemini response', {
+      hasCandidate: !!data.candidates?.[0],
+      hasContent: !!data.candidates?.[0]?.content,
+    })
     throw new Error('No response from Gemini')
   }
 
@@ -120,16 +130,20 @@ function extractJSON<T>(text: string): T {
   const end = jsonStr.lastIndexOf('}')
 
   if (start === -1 || end === -1) {
-    console.error('No JSON found. Full response:', text)
-    throw new Error(`No JSON found in response. Response starts with: ${text.slice(0, 200)}`)
+    logger.error('No JSON found in response', {
+      responsePreview: text.slice(0, 200),
+    })
+    throw new Error('No JSON found in response')
   }
 
   try {
     return JSON.parse(jsonStr.slice(start, end + 1))
   } catch (parseError) {
-    console.error('JSON parse error:', parseError)
-    console.error('Attempted to parse:', jsonStr.slice(start, end + 1).slice(0, 500))
-    throw new Error(`Failed to parse JSON: ${parseError}`)
+    logger.error('JSON parse error', {
+      error: parseError instanceof Error ? parseError.message : String(parseError),
+      jsonPreview: jsonStr.slice(start, end + 1).slice(0, 200),
+    })
+    throw new Error('Failed to parse JSON from response')
   }
 }
 

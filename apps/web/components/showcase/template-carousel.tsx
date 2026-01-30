@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -17,29 +18,42 @@ interface Template {
 
 function useDragScroll(ref: React.RefObject<HTMLDivElement | null>) {
   const [isDragging, setIsDragging] = React.useState(false)
+  const isMouseDown = React.useRef(false)
   const startX = React.useRef(0)
+  const startPageX = React.useRef(0)
   const scrollLeft = React.useRef(0)
 
   const handleMouseDown = React.useCallback((e: React.MouseEvent) => {
     if (!ref.current) return
-    setIsDragging(true)
+    isMouseDown.current = true
     startX.current = e.pageX - ref.current.offsetLeft
+    startPageX.current = e.pageX
     scrollLeft.current = ref.current.scrollLeft
   }, [ref])
 
   const handleMouseMove = React.useCallback((e: React.MouseEvent) => {
-    if (!isDragging || !ref.current) return
-    e.preventDefault()
-    const x = e.pageX - ref.current.offsetLeft
-    const walk = (x - startX.current) * 1.5
-    ref.current.scrollLeft = scrollLeft.current - walk
-  }, [isDragging, ref])
+    if (!isMouseDown.current || !ref.current) return
+
+    const movedDistance = Math.abs(e.pageX - startPageX.current)
+
+    // Only start dragging after threshold
+    if (movedDistance > DRAG_THRESHOLD) {
+      setIsDragging(true)
+      e.preventDefault()
+      const x = e.pageX - ref.current.offsetLeft
+      const walk = (x - startX.current) * 1.5
+      ref.current.scrollLeft = scrollLeft.current - walk
+    }
+  }, [ref])
 
   const handleMouseUp = React.useCallback(() => {
-    setIsDragging(false)
+    isMouseDown.current = false
+    // Delay resetting isDragging to allow click event to check it
+    setTimeout(() => setIsDragging(false), 0)
   }, [])
 
   const handleMouseLeave = React.useCallback(() => {
+    isMouseDown.current = false
     setIsDragging(false)
   }, [])
 
@@ -277,11 +291,13 @@ export function TemplateCarousel() {
   )
 }
 
+const DRAG_THRESHOLD = 5
+
 function TemplateCard({ template, isDragging }: { template: Template; isDragging?: boolean }) {
   const videoRef = React.useRef<HTMLVideoElement>(null)
   const [isHovered, setIsHovered] = React.useState(false)
-  const [isLoaded, setIsLoaded] = React.useState(false)
-  const clickPrevented = React.useRef(false)
+  const shouldPreventClick = React.useRef(false)
+  const startPos = React.useRef<{ x: number; y: number } | null>(null)
 
   const handleMouseEnter = () => {
     if (isDragging) return
@@ -296,52 +312,49 @@ function TemplateCard({ template, isDragging }: { template: Template; isDragging
 
   const handleMouseLeave = () => {
     setIsHovered(false)
+    startPos.current = null
+    shouldPreventClick.current = false
     if (videoRef.current) {
       videoRef.current.pause()
       videoRef.current.currentTime = 0
     }
   }
 
-  const handleMouseDown = () => {
-    clickPrevented.current = false
+  const handleMouseDown = (e: React.MouseEvent) => {
+    shouldPreventClick.current = false
+    startPos.current = { x: e.clientX, y: e.clientY }
   }
 
-  const handleMouseMove = () => {
-    clickPrevented.current = true
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!startPos.current) return
+    const dx = Math.abs(e.clientX - startPos.current.x)
+    const dy = Math.abs(e.clientY - startPos.current.y)
+    if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+      shouldPreventClick.current = true
+    }
   }
 
-  const handleClick = () => {
-    if (clickPrevented.current || isDragging) return
-    window.location.href = `/templates/${template.id}/workflow`
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (shouldPreventClick.current || isDragging) {
       e.preventDefault()
-      if (!isDragging) {
-        window.location.href = `/templates/${template.id}/workflow`
-      }
     }
   }
 
   return (
-    <article
-      role="button"
-      tabIndex={0}
+    <Link
+      href={`/templates/${template.id}`}
       className={cn(
-        'group relative flex-shrink-0',
+        'group relative flex-shrink-0 block',
         'w-[200px] sm:w-[240px]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-neon-pink)] focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-2xl',
-        isDragging ? 'pointer-events-none' : 'cursor-pointer'
+        'cursor-pointer'
       )}
+      onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-      onFocus={handleMouseEnter}
-      onBlur={handleMouseLeave}
+      draggable={false}
     >
       <div
         className={cn(
@@ -375,7 +388,6 @@ function TemplateCard({ template, isDragging }: { template: Template; isDragging
           loop
           playsInline
           preload="none"
-          onLoadedData={() => setIsLoaded(true)}
           className={cn(
             'absolute inset-0 h-full w-full object-cover',
             'transition-opacity duration-300',
@@ -407,6 +419,6 @@ function TemplateCard({ template, isDragging }: { template: Template; isDragging
           </div>
         </div>
       </div>
-    </article>
+    </Link>
   )
 }

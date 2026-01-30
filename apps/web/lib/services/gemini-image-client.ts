@@ -7,6 +7,10 @@
  * @see https://ai.google.dev/gemini-api/docs/image-generation
  */
 
+import { getLogger } from '@/lib/logger'
+
+const logger = getLogger('gemini-image-client')
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const GEMINI_IMAGE_MODEL = 'gemini-3-pro-image-preview'
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`
@@ -124,8 +128,10 @@ async function callGeminiImage(
     },
   }
 
-  console.log('[gemini-image] Request URL:', GEMINI_API_URL)
-  console.log('[gemini-image] Request config:', JSON.stringify(requestBody.generationConfig))
+  logger.debug('Calling Gemini Image API', {
+    hasAspectRatio: !!config.aspectRatio,
+    hasImageSize: !!config.imageSize,
+  })
 
   const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
     method: 'POST',
@@ -137,8 +143,10 @@ async function callGeminiImage(
 
   if (!response.ok) {
     const errorBody = await response.text()
-    console.error('[gemini-image] API Error:', response.status, response.statusText)
-    console.error('[gemini-image] Error body:', errorBody)
+    logger.error('Gemini Image API error', {
+      status: response.status,
+      statusText: response.statusText,
+    })
     throw new GeminiImageError(
       `Gemini API error: ${response.status} ${response.statusText}`,
       response.status,
@@ -290,7 +298,7 @@ export async function urlToBase64(
         mimeType = 'image/webp'
       }
 
-      console.log(`[gemini-image] Read local file: ${filePath}, size: ${buffer.length}`)
+      logger.debug('Read local file', { path: filePath, size: buffer.length })
       return { base64, mimeType }
     } catch (error) {
       throw new GeminiImageError(`Failed to read local image: ${filePath}`)

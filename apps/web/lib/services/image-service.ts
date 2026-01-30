@@ -15,6 +15,9 @@ import {
   urlsToBase64,
   GeminiImageError,
 } from './gemini-image-client'
+import { getLogger } from '@/lib/logger'
+
+const logger = getLogger('image-service')
 import type { GeminiAspectRatio, GeminiImageSize } from './gemini-image-client'
 import { saveImage } from './image-storage'
 import {
@@ -37,11 +40,8 @@ const USE_KIEAI = !USE_GEMINI && isKieaiAvailable()
 const IS_MOCK = !USE_GEMINI && !USE_KIEAI
 
 // Log provider selection at module load
-console.log('[image-service] Provider selection:', {
-  USE_GEMINI,
-  USE_KIEAI,
-  IS_MOCK,
-  GEMINI_KEY_EXISTS: !!process.env.GEMINI_API_KEY,
+logger.info('Image service initialized', {
+  provider: USE_GEMINI ? 'gemini' : USE_KIEAI ? 'kieai' : 'mock',
 })
 
 // ============================================================
@@ -203,11 +203,12 @@ async function editImageWithGemini(
   params: ImageEditParams
 ): Promise<GenerationResult> {
   try {
-    console.log('[image-service] editImageWithGemini referenceUrls:', params.referenceUrls)
+    logger.debug('Starting image edit with Gemini', {
+      referenceCount: params.referenceUrls.length,
+    })
 
     // Convert reference URLs to base64
     const referenceImages = await urlsToBase64(params.referenceUrls)
-    console.log('[image-service] Converted to base64, count:', referenceImages.length)
 
     const result = await generateImageFromReference({
       prompt: params.prompt,
@@ -249,7 +250,9 @@ async function editImageWithGemini(
       },
     }
   } catch (error) {
-    console.error('[image-service] editImageWithGemini error:', error)
+    logger.error('Image edit with Gemini failed', {
+      error: error instanceof Error ? error.message : String(error),
+    })
     const message =
       error instanceof GeminiImageError ? error.message : 'Image edit failed'
     return {

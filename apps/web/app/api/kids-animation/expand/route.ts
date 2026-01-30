@@ -2,6 +2,9 @@ import { createApiHandler } from '@/lib/api'
 import { z } from 'zod'
 import { editImage, getImageServiceProvider } from '@/lib/services'
 import { KIDS_FORM_FACTOR_PRESETS } from '@vibe-media-lab/shared'
+import { getLogger } from '@/lib/logger'
+
+const logger = getLogger('kids-animation/expand')
 
 /**
  * 앵커 확장 변형 타입
@@ -97,8 +100,10 @@ export const POST = createApiHandler<ExpandResponse>(
     let successCount = 0
     let failedCount = 0
 
-    // Process each anchor
-    console.log('[expand] Processing anchors:', anchors.map(a => ({ id: a.id, category: a.category, url: a.url })))
+    logger.debug('Processing anchors for expansion', {
+      count: anchors.length,
+      ids: anchors.map((a) => a.id),
+    })
 
     for (const anchor of anchors) {
       const variations = anchor.category === 'character'
@@ -116,7 +121,11 @@ export const POST = createApiHandler<ExpandResponse>(
           ? characterAspectRatio
           : backgroundAspectRatio
 
-        console.log(`[expand] Generating ${anchor.id}-${variation}, referenceUrl: ${anchor.url}`)
+        logger.debug('Generating variation', {
+          anchorId: anchor.id,
+          variation,
+          category: anchor.category,
+        })
 
         const result = await editImage({
           prompt,
@@ -125,7 +134,11 @@ export const POST = createApiHandler<ExpandResponse>(
           resolution,
         })
 
-        console.log(`[expand] Result for ${anchor.id}-${variation}:`, { success: result.success, url: result.url?.slice(0, 50), error: result.error })
+        logger.debug('Variation result', {
+          id: `${anchor.id}-${variation}`,
+          success: result.success,
+          hasUrl: !!result.url,
+        })
 
         if (result.success && result.url) {
           expanded.push({

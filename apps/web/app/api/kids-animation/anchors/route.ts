@@ -5,6 +5,9 @@ import {
   AnchorsRequestSchema,
   type AnchorsResponse,
 } from '@/lib/api/kids-animation/types'
+import { getLogger } from '@/lib/logger'
+
+const logger = getLogger('kids-animation/anchors')
 
 /**
  * POST /api/kids-animation/anchors
@@ -24,10 +27,11 @@ export const POST = createApiHandler<AnchorsResponse>(
     const body = await request.json()
     const validated = AnchorsRequestSchema.parse(body)
 
-    // Debug: log provider info
     const provider = getImageServiceProvider()
-    console.log('[anchors] Image provider:', provider)
-    console.log('[anchors] Anchor prompts count:', validated.anchorPrompts?.length)
+    logger.debug('Starting anchor generation', {
+      provider,
+      promptCount: validated.anchorPrompts?.length,
+    })
 
     const { sessionId, anchorPrompts, formFactor = 'longform', style } = validated
     const styleConfig = KIDS_ANIMATION_STYLES[style]
@@ -46,9 +50,12 @@ export const POST = createApiHandler<AnchorsResponse>(
       // Build full prompt with style suffix
       const fullPrompt = `${anchorPrompt.prompt}. ${styleConfig.visualPromptSuffix}`
 
-      console.log(`[anchors] Generating ${anchorPrompt.category}: ${anchorPrompt.name}`)
-      console.log(`[anchors] Prompt: ${fullPrompt.slice(0, 100)}...`)
-      console.log(`[anchors] Aspect ratio: ${aspectRatio}, Resolution: ${resolution}`)
+      logger.debug('Generating anchor image', {
+        category: anchorPrompt.category,
+        name: anchorPrompt.name,
+        aspectRatio,
+        resolution,
+      })
 
       // Generate image
       const result = await generateImage({
@@ -57,7 +64,11 @@ export const POST = createApiHandler<AnchorsResponse>(
         resolution,
       })
 
-      console.log(`[anchors] Result:`, result.success ? result.url : result.error)
+      logger.debug('Anchor generation result', {
+        id: anchorPrompt.id,
+        success: result.success,
+        hasUrl: !!result.url,
+      })
 
       anchors.push({
         id: anchorPrompt.id,
