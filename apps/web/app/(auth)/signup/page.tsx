@@ -60,8 +60,13 @@ function SignupFlow() {
 }
 
 function InviteCodeStep({ onVerified }: { onVerified: (code: string) => void }) {
+  const searchParams = useSearchParams()
+  const errorParam = searchParams.get('error')
+
   const [code, setCode] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(
+    errorParam === 'invite_required' ? '회원가입을 위해 초대 코드가 필요합니다.' : null
+  )
   const [loading, setLoading] = useState(false)
 
   const handleVerify = async (e: React.FormEvent) => {
@@ -226,7 +231,7 @@ function SignupForm({ inviteCode }: { inviteCode: string }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+          redirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(redirectTo)}&invite_verified=true`,
         },
       })
 

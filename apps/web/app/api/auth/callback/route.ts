@@ -6,32 +6,26 @@ import { createClient } from '@/lib/supabase/server'
  * Open Redirect 취약점을 방지하기 위해 상대 경로만 허용합니다.
  */
 function isValidRedirectPath(path: string): boolean {
-  // null, undefined, 빈 문자열 체크
   if (!path || typeof path !== 'string') {
     return false
   }
 
-  // 상대 경로만 허용 (/ 로 시작)
   if (!path.startsWith('/')) {
     return false
   }
 
-  // 프로토콜 상대 URL 차단 (//example.com)
   if (path.startsWith('//')) {
     return false
   }
 
-  // 프로토콜 포함 URL 차단 (javascript:, data:, http:, https: 등)
   if (path.includes(':')) {
     return false
   }
 
-  // URL 인코딩된 프로토콜 차단 (%3a = :)
   if (path.toLowerCase().includes('%3a')) {
     return false
   }
 
-  // 백슬래시 차단 (일부 브라우저에서 //로 해석될 수 있음)
   if (path.includes('\\')) {
     return false
   }
@@ -40,19 +34,19 @@ function isValidRedirectPath(path: string): boolean {
 }
 
 /** 허용된 리다이렉트 경로 목록 */
-const ALLOWED_REDIRECT_PATHS = ['/studio', '/gallery', '/history', '/settings', '/templates', '/account']
-const DEFAULT_REDIRECT_PATH = '/studio'
+const ALLOWED_REDIRECT_PATHS = ['/', '/studio', '/gallery', '/history', '/settings', '/templates', '/account']
+const DEFAULT_REDIRECT_PATH = '/'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const nextParam = searchParams.get('next')
+  const inviteVerified = searchParams.get('invite_verified')
 
   // 안전한 리다이렉트 경로 결정
   let safeRedirectPath = DEFAULT_REDIRECT_PATH
 
   if (nextParam && isValidRedirectPath(nextParam)) {
-    // 추가 보안: 허용된 경로의 prefix와 일치하는지 확인
     const isAllowedPath = ALLOWED_REDIRECT_PATHS.some(
       (allowed) => nextParam === allowed || nextParam.startsWith(`${allowed}/`)
     )
@@ -63,9 +57,26 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
-    if (!error) {
+    if (!error && data.user) {
+      const user = data.user
+
+      // 새 사용자인지 확인 (가입 후 1분 이내)
+      const createdAt = new Date(user.created_at).getTime()
+      const now = Date.now()
+      const isNewUser = now - createdAt < 60 * 1000 // 1분 이내
+
+      // 새 사용자인데 초대 코드 검증을 거치지 않은 경우 차단
+      if (isNewUser && inviteVerified !== 'true') {
+        // 새로 생성된 계정 삭제 (관리자 권한 필요하므로 로그아웃만 처리)
+        await supabase.auth.signOut()
+
+        const forwardedHost = request.headers.get('x-forwarded-host')
+        const baseUrl = forwardedHost ? `https://${forwardedHost}` : origin
+        return NextResponse.redirect(`${baseUrl}/signup?error=invite_required`)
+      }
+
       const forwardedHost = request.headers.get('x-forwarded-host')
       const isLocalEnv = process.env.NODE_ENV === 'development'
 
@@ -79,6 +90,5 @@ export async function GET(request: Request) {
     }
   }
 
-  // Return the user to an error page with instructions
   return NextResponse.redirect(`${origin}/login?error=auth_callback_error`)
 }
