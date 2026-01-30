@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { Play, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Template {
@@ -55,6 +55,15 @@ function useDragScroll(ref: React.RefObject<HTMLDivElement | null>) {
 }
 
 const TEMPLATES: Template[] = [
+  {
+    id: 'kids-animation',
+    title: 'Kids Animation Studio',
+    description: 'Disney/Pixar 스타일 아동용 애니메이션',
+    views: '320K',
+    video: '/templates/kids-animation.mp4',
+    poster: '/templates/kids-animation.jpg',
+    badge: 'NEW',
+  },
   {
     id: 'brainrot',
     title: 'Brainrot Core',
@@ -277,7 +286,12 @@ function TemplateCard({ template, isDragging }: { template: Template; isDragging
   const handleMouseEnter = () => {
     if (isDragging) return
     setIsHovered(true)
-    videoRef.current?.play()
+    if (videoRef.current) {
+      videoRef.current.load()
+      videoRef.current.play().catch(() => {
+        // Ignore AbortError when play is interrupted by pause
+      })
+    }
   }
 
   const handleMouseLeave = () => {
@@ -298,14 +312,14 @@ function TemplateCard({ template, isDragging }: { template: Template; isDragging
 
   const handleClick = () => {
     if (clickPrevented.current || isDragging) return
-    window.location.href = `/templates/${template.id}`
+    window.location.href = `/templates/${template.id}/workflow`
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       if (!isDragging) {
-        window.location.href = `/templates/${template.id}`
+        window.location.href = `/templates/${template.id}/workflow`
       }
     }
   }
@@ -339,47 +353,37 @@ function TemplateCard({ template, isDragging }: { template: Template; isDragging
           'group-hover:shadow-[0_0_30px_rgba(244,37,140,0.3)]'
         )}
       >
+        {/* Poster image - visible until video plays */}
+        <img
+          src={template.poster}
+          alt={template.title}
+          width={240}
+          height={427}
+          className={cn(
+            'absolute inset-0 h-full w-full object-cover',
+            'transition-opacity duration-300',
+            isHovered ? 'opacity-0' : 'opacity-100'
+          )}
+        />
+
         <video
           ref={videoRef}
           src={template.video}
-          poster={template.poster}
           width={240}
           height={427}
           muted
           loop
           playsInline
-          preload="metadata"
+          preload="none"
           onLoadedData={() => setIsLoaded(true)}
           className={cn(
             'absolute inset-0 h-full w-full object-cover',
-            'transition-opacity duration-500',
-            isLoaded ? 'opacity-100' : 'opacity-0'
+            'transition-opacity duration-300',
+            isHovered ? 'opacity-100' : 'opacity-0'
           )}
         />
 
-        {!isLoaded && (
-          <div className="absolute inset-0 animate-pulse motion-reduce:animate-none bg-gradient-to-br from-white/10 to-white/5" />
-        )}
-
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-        <div
-          className={cn(
-            'absolute inset-0 flex items-center justify-center',
-            'transition-opacity duration-300',
-            isHovered ? 'opacity-0' : 'opacity-100'
-          )}
-        >
-          <div
-            className={cn(
-              'flex h-14 w-14 items-center justify-center rounded-full',
-              'bg-white/10 backdrop-blur-sm',
-              'transition-transform duration-300'
-            )}
-          >
-            <Play className="h-6 w-6 fill-white text-white" aria-hidden="true" />
-          </div>
-        </div>
 
         {template.badge && (
           <span

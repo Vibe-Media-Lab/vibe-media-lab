@@ -1,6 +1,218 @@
 import type { Template } from '@vibe-media-lab/shared'
 
 export const TEMPLATES: Template[] = [
+  // ============================================================
+  // Kids Animation Studio (Featured)
+  // ============================================================
+  {
+    id: 'kids-animation',
+    title: 'Kids Animation Studio',
+    description: 'Disney/Pixar 스타일 아동용 애니메이션',
+    longDescription:
+      '아이들을 위한 교육적인 애니메이션을 AI로 제작하세요. 손씻기, 채소 먹기 등 교훈적인 스토리를 Disney/Pixar 스타일의 고품질 애니메이션으로 만들어줍니다. 스토리 생성부터 최종 편집까지 단계별로 검토하며 진행합니다.',
+    views: '320K',
+    video: '/templates/kids-animation.mp4',
+    poster: '/templates/kids-animation.jpg',
+    badge: 'NEW',
+    category: 'kids',
+    tags: ['kids', 'animation', 'educational', 'pixar', 'disney', 'story'],
+    estimatedTime: '15-30분',
+    difficulty: 'medium',
+    platforms: ['youtube', 'shorts'],
+    workflow: {
+      steps: [
+        {
+          id: 'setup',
+          type: 'config',
+          label: '프로젝트 설정',
+          description: '스토리 주제와 제작 옵션을 설정하세요',
+          required: true,
+          config: {
+            fields: [
+              {
+                id: 'topic',
+                type: 'textarea',
+                label: '스토리 주제',
+                placeholder: '예: 손씻기, 세균과 싸우는 미시세계',
+                required: true,
+              },
+              {
+                id: 'formFactor',
+                type: 'select',
+                label: '영상 형식',
+                options: [
+                  { value: 'longform', label: '롱폼 (16:9) - YouTube, 태블릿, TV' },
+                  { value: 'shortform', label: '숏폼 (9:16) - TikTok, Reels, Shorts' },
+                ],
+                default: 'longform',
+              },
+              {
+                id: 'songVersion',
+                type: 'toggle',
+                label: '노래 버전 생성',
+                default: false,
+              },
+            ],
+          },
+        },
+        {
+          id: 'story',
+          type: 'generation-review',
+          label: '스토리 생성',
+          description: 'AI가 6단계 플롯 구조의 스토리를 생성합니다',
+          required: true,
+          config: {
+            generateAction: 'kids/story',
+            outputFormat: 'markdown',
+            editable: true,
+            previewType: 'text',
+          },
+        },
+        {
+          id: 'script',
+          type: 'generation-review',
+          label: '스크립트 생성',
+          description: '샷 구성, 나레이션, 프롬프트를 생성합니다',
+          required: true,
+          config: {
+            generateAction: 'kids/script',
+            outputFormat: 'json',
+            editable: true,
+            previewType: 'shot-list',
+          },
+        },
+        {
+          id: 'anchors',
+          type: 'media-choice',
+          label: '앵커 이미지',
+          description: '캐릭터/배경 기준 이미지를 준비합니다',
+          required: true,
+          config: {
+            modes: [
+              {
+                id: 'generate',
+                label: 'AI 생성',
+                description: '스크립트 기반으로 자동 생성',
+                default: true,
+              },
+              {
+                id: 'upload',
+                label: '직접 업로드',
+                description: '미드저니 등으로 만든 이미지 업로드',
+              },
+            ],
+            uploadConfig: {
+              accept: ['image/png', 'image/jpeg', 'image/webp'],
+              maxSizeMb: 20,
+              multiple: true,
+              categories: ['character', 'background'],
+            },
+            generateAction: 'kids/anchors',
+            previewType: 'image-grid',
+            progress: {
+              show: true,
+              perItem: true,
+            },
+          },
+        },
+        {
+          id: 'expand',
+          type: 'generation-review',
+          label: '앵커 확장',
+          description: '앵커 이미지를 다양한 각도/표정으로 확장합니다',
+          required: true,
+          config: {
+            generateAction: 'kids/expand',
+            previewType: 'image-grid',
+            regeneratable: true,
+            progress: {
+              show: true,
+              perItem: true,
+            },
+            hint: '캐릭터: front, three_quarter, happy, sad | 배경: wide, medium',
+          },
+        },
+        {
+          id: 'shots',
+          type: 'generation-review',
+          label: '샷 이미지 생성',
+          description: '확장된 앵커를 기반으로 각 장면의 이미지를 생성합니다',
+          required: true,
+          config: {
+            generateAction: 'kids/shots',
+            batchSize: 7,
+            previewType: 'shot-gallery',
+            regeneratable: true,
+            progress: {
+              show: true,
+              perItem: true,
+            },
+          },
+        },
+        {
+          id: 'videos',
+          type: 'generation-review',
+          label: '비디오 생성',
+          description: '이미지를 애니메이션 비디오로 변환합니다',
+          required: true,
+          config: {
+            generateAction: 'kids/videos',
+            previewType: 'video-timeline',
+            regeneratable: true,
+            progress: {
+              show: true,
+              perItem: true,
+              estimatedTime: true,
+            },
+          },
+        },
+        {
+          id: 'audio',
+          type: 'generation-review',
+          label: '오디오 생성',
+          description: '나레이션 TTS와 배경 BGM을 생성합니다',
+          required: true,
+          config: {
+            generateAction: 'kids/audio',
+            subSteps: [
+              { id: 'tts', label: '나레이션' },
+              { id: 'bgm', label: 'BGM' },
+            ],
+            previewType: 'audio-player',
+            progress: {
+              show: true,
+              perItem: true,
+            },
+          },
+        },
+        {
+          id: 'final',
+          type: 'generation-review',
+          label: '최종 편집',
+          description: '모든 요소를 합성하여 완성본을 생성합니다',
+          required: true,
+          config: {
+            generateAction: 'kids/final',
+            subSteps: [
+              { id: 'merge', label: '영상 합성' },
+              { id: 'thumbnail', label: '썸네일 생성' },
+              { id: 'song', label: '노래 버전', conditional: 'songVersion' },
+            ],
+            previewType: 'video-player',
+            downloadable: true,
+            progress: {
+              show: true,
+            },
+          },
+        },
+      ],
+      outputConfig: {
+        aspectRatio: '16:9',
+        format: 'mp4',
+      },
+    },
+    relatedTemplates: ['storytime', 'factbomb', 'tutorial'],
+  },
   {
     id: 'brainrot',
     title: 'Brainrot Core',
@@ -852,253 +1064,6 @@ export const TEMPLATES: Template[] = [
       },
     },
     relatedTemplates: ['tutorial', 'satisfying', 'aesthetic'],
-  },
-  // ============================================================
-  // Kids Animation Studio
-  // ============================================================
-  {
-    id: 'kids-animation',
-    title: 'Kids Animation Studio',
-    description: 'Disney/Pixar 스타일 아동용 애니메이션',
-    longDescription:
-      '아이들을 위한 교육적인 애니메이션을 AI로 제작하세요. 손씻기, 채소 먹기 등 교훈적인 스토리를 Disney/Pixar 스타일의 고품질 애니메이션으로 만들어줍니다. 스토리 생성부터 최종 편집까지 단계별로 검토하며 진행합니다.',
-    views: '320K',
-    video: '/templates/kids-animation.mp4',
-    poster: '/templates/kids-animation.webp',
-    badge: 'NEW',
-    category: 'kids',
-    tags: ['kids', 'animation', 'educational', 'pixar', 'disney', 'story'],
-    estimatedTime: '15-30분',
-    difficulty: 'medium',
-    platforms: ['youtube', 'shorts'],
-    workflow: {
-      steps: [
-        // ─────────────────────────────────────────────────────
-        // Step 1: 프로젝트 설정 (입력)
-        // ─────────────────────────────────────────────────────
-        {
-          id: 'setup',
-          type: 'config',
-          label: '프로젝트 설정',
-          description: '스토리 주제와 제작 옵션을 설정하세요',
-          required: true,
-          config: {
-            fields: [
-              {
-                id: 'topic',
-                type: 'textarea',
-                label: '스토리 주제',
-                placeholder: '예: 손씻기, 세균과 싸우는 미시세계',
-                required: true,
-              },
-              {
-                id: 'formFactor',
-                type: 'select',
-                label: '영상 형식',
-                options: [
-                  { value: 'longform', label: '롱폼 (16:9) - YouTube, 태블릿, TV' },
-                  { value: 'shortform', label: '숏폼 (9:16) - TikTok, Reels, Shorts' },
-                ],
-                default: 'longform',
-              },
-              {
-                id: 'songVersion',
-                type: 'toggle',
-                label: '노래 버전 생성',
-                default: false,
-              },
-            ],
-          },
-        },
-
-        // ─────────────────────────────────────────────────────
-        // Step 2: 스토리 생성 + 검토
-        // ─────────────────────────────────────────────────────
-        {
-          id: 'story',
-          type: 'generation-review',
-          label: '스토리 생성',
-          description: 'AI가 6단계 플롯 구조의 스토리를 생성합니다',
-          required: true,
-          config: {
-            generateAction: 'kids/story',
-            outputFormat: 'markdown',
-            editable: true,
-            previewType: 'text',
-          },
-        },
-
-        // ─────────────────────────────────────────────────────
-        // Step 3: 스크립트 생성 + 검토
-        // ─────────────────────────────────────────────────────
-        {
-          id: 'script',
-          type: 'generation-review',
-          label: '스크립트 생성',
-          description: '샷 구성, 나레이션, 프롬프트를 생성합니다',
-          required: true,
-          config: {
-            generateAction: 'kids/script',
-            outputFormat: 'json',
-            editable: true,
-            previewType: 'shot-list',
-          },
-        },
-
-        // ─────────────────────────────────────────────────────
-        // Step 4: 앵커 이미지 (업로드 OR 생성)
-        // ─────────────────────────────────────────────────────
-        {
-          id: 'anchors',
-          type: 'media-choice',
-          label: '앵커 이미지',
-          description: '캐릭터/배경 기준 이미지를 준비합니다',
-          required: true,
-          config: {
-            modes: [
-              {
-                id: 'generate',
-                label: 'AI 생성',
-                description: '스크립트 기반으로 자동 생성',
-                default: true,
-              },
-              {
-                id: 'upload',
-                label: '직접 업로드',
-                description: '미드저니 등으로 만든 이미지 업로드',
-              },
-            ],
-            uploadConfig: {
-              accept: ['image/png', 'image/jpeg', 'image/webp'],
-              maxSizeMb: 20,
-              multiple: true,
-              categories: ['character', 'background'],
-            },
-            generateAction: 'kids/anchors',
-            previewType: 'image-grid',
-            progress: {
-              show: true,
-              perItem: true,
-            },
-          },
-        },
-
-        // ─────────────────────────────────────────────────────
-        // Step 5: 앵커 이미지 확장
-        // ─────────────────────────────────────────────────────
-        {
-          id: 'expand',
-          type: 'generation-review',
-          label: '앵커 확장',
-          description: '앵커 이미지를 다양한 각도/표정으로 확장합니다',
-          required: true,
-          config: {
-            generateAction: 'kids/expand',
-            previewType: 'image-grid',
-            regeneratable: true,
-            progress: {
-              show: true,
-              perItem: true,
-            },
-            hint: '캐릭터: front, three_quarter, happy, sad | 배경: wide, medium',
-          },
-        },
-
-        // ─────────────────────────────────────────────────────
-        // Step 6: 샷 이미지 생성
-        // ─────────────────────────────────────────────────────
-        {
-          id: 'shots',
-          type: 'generation-review',
-          label: '샷 이미지 생성',
-          description: '확장된 앵커를 기반으로 각 장면의 이미지를 생성합니다',
-          required: true,
-          config: {
-            generateAction: 'kids/shots',
-            batchSize: 7,
-            previewType: 'shot-gallery',
-            regeneratable: true,
-            progress: {
-              show: true,
-              perItem: true,
-            },
-          },
-        },
-
-        // ─────────────────────────────────────────────────────
-        // Step 6: 비디오 생성
-        // ─────────────────────────────────────────────────────
-        {
-          id: 'videos',
-          type: 'generation-review',
-          label: '비디오 생성',
-          description: '이미지를 애니메이션 비디오로 변환합니다',
-          required: true,
-          config: {
-            generateAction: 'kids/videos',
-            previewType: 'video-timeline',
-            regeneratable: true,
-            progress: {
-              show: true,
-              perItem: true,
-              estimatedTime: true,
-            },
-          },
-        },
-
-        // ─────────────────────────────────────────────────────
-        // Step 7: 오디오 생성
-        // ─────────────────────────────────────────────────────
-        {
-          id: 'audio',
-          type: 'generation-review',
-          label: '오디오 생성',
-          description: '나레이션 TTS와 배경 BGM을 생성합니다',
-          required: true,
-          config: {
-            generateAction: 'kids/audio',
-            subSteps: [
-              { id: 'tts', label: '나레이션' },
-              { id: 'bgm', label: 'BGM' },
-            ],
-            previewType: 'audio-player',
-            progress: {
-              show: true,
-              perItem: true,
-            },
-          },
-        },
-
-        // ─────────────────────────────────────────────────────
-        // Step 8: 최종 편집
-        // ─────────────────────────────────────────────────────
-        {
-          id: 'final',
-          type: 'generation-review',
-          label: '최종 편집',
-          description: '모든 요소를 합성하여 완성본을 생성합니다',
-          required: true,
-          config: {
-            generateAction: 'kids/final',
-            subSteps: [
-              { id: 'merge', label: '영상 합성' },
-              { id: 'thumbnail', label: '썸네일 생성' },
-              { id: 'song', label: '노래 버전', conditional: 'songVersion' },
-            ],
-            previewType: 'video-player',
-            downloadable: true,
-            progress: {
-              show: true,
-            },
-          },
-        },
-      ],
-      outputConfig: {
-        aspectRatio: '16:9',
-        format: 'mp4',
-      },
-    },
-    relatedTemplates: ['storytime', 'factbomb', 'tutorial'],
   },
 ]
 

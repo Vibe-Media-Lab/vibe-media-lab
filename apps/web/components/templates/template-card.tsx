@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { Play, Clock, Zap } from 'lucide-react'
+import { Clock, Zap } from 'lucide-react'
 import type { Template, TemplateBadge, TemplateDifficulty } from '@vibe-media-lab/shared'
 
 interface TemplateCardProps {
@@ -26,11 +26,15 @@ const DIFFICULTY_LABELS: Record<TemplateDifficulty, string> = {
 export function TemplateCard({ template, priority }: TemplateCardProps) {
   const videoRef = React.useRef<HTMLVideoElement>(null)
   const [isHovered, setIsHovered] = React.useState(false)
-  const [isLoaded, setIsLoaded] = React.useState(false)
 
   const handleMouseEnter = () => {
     setIsHovered(true)
-    videoRef.current?.play()
+    if (videoRef.current) {
+      videoRef.current.load()
+      videoRef.current.play().catch(() => {
+        // Ignore AbortError when play is interrupted by pause
+      })
+    }
   }
 
   const handleMouseLeave = () => {
@@ -61,51 +65,36 @@ export function TemplateCard({ template, priority }: TemplateCardProps) {
             'group-hover:shadow-[0_0_30px_rgba(244,37,140,0.3)]'
           )}
         >
+          {/* Poster image - visible until video plays */}
+          <img
+            src={template.poster}
+            alt={template.title}
+            width={320}
+            height={569}
+            className={cn(
+              'absolute inset-0 h-full w-full object-cover',
+              'transition-opacity duration-300',
+              isHovered ? 'opacity-0' : 'opacity-100'
+            )}
+          />
+
           <video
             ref={videoRef}
             src={template.video}
-            poster={template.poster}
             width={320}
             height={569}
             muted
             loop
             playsInline
-            preload={priority ? 'metadata' : 'none'}
-            onLoadedData={() => setIsLoaded(true)}
+            preload="none"
             className={cn(
               'absolute inset-0 h-full w-full object-cover',
-              'transition-opacity duration-500',
-              isLoaded ? 'opacity-100' : 'opacity-0'
+              'transition-opacity duration-300',
+              isHovered ? 'opacity-100' : 'opacity-0'
             )}
           />
 
-          {!isLoaded && (
-            <div className="absolute inset-0 animate-pulse motion-reduce:animate-none bg-gradient-to-br from-white/10 to-white/5" />
-          )}
-
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-          <div
-            className={cn(
-              'absolute inset-0 flex items-center justify-center',
-              'transition-opacity duration-300',
-              isHovered ? 'opacity-0' : 'opacity-100'
-            )}
-          >
-            <div
-              className={cn(
-                'flex h-14 w-14 items-center justify-center rounded-full',
-                'bg-white/10 backdrop-blur-sm',
-                'transition-transform duration-300',
-                'group-hover:scale-110'
-              )}
-            >
-              <Play
-                className="h-6 w-6 fill-white text-white"
-                aria-hidden="true"
-              />
-            </div>
-          </div>
 
           {template.badge && (
             <span
