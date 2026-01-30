@@ -39,7 +39,7 @@ function LoginSkeleton() {
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get('redirect') || '/studio'
+  const redirectTo = searchParams.get('redirect') || '/'
   const supabase = createClient()
 
   const [email, setEmail] = useState('')

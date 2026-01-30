@@ -151,7 +151,7 @@ function InviteCodeStep({ onVerified }: { onVerified: (code: string) => void }) 
 
 function SignupForm({ inviteCode }: { inviteCode: string }) {
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get('redirect') || '/studio'
+  const redirectTo = searchParams.get('redirect') || '/'
   const supabase = createClient()
 
   const [email, setEmail] = useState('')
