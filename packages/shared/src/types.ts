@@ -505,6 +505,7 @@ export interface KidsAnchor {
 export const GenerationProgressStatusSchema = z.enum([
   'idle',
   'generating',
+  'completed',
   'reviewing',
   'approved',
   'failed',
