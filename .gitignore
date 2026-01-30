@@ -36,3 +36,7 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Internal docs
+SCRATCHPAD.md
+docs/
