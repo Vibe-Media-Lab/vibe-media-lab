@@ -38,48 +38,43 @@ export function VideoTimelineSkeleton({
       <span className="text-sm font-medium text-white/60">
         비디오 생성 중 ({completedCount}/{count})
       </span>
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {skeletonItems.map((item) => (
           <div
             key={item.id}
-            className="relative flex-shrink-0 overflow-hidden rounded-lg"
-            style={{ width: `${Math.max(160, duration * 30)}px` }}
+            className={cn(
+              'relative aspect-video overflow-hidden rounded-lg',
+              item.status === 'completed' ? 'bg-white/10' : 'bg-white/5'
+            )}
           >
-            <div
-              className={cn(
-                'relative aspect-video',
-                item.status === 'completed' ? 'bg-white/10' : 'bg-white/5'
-              )}
-            >
-              {item.status === 'completed' && item.completedUrl ? (
-                // 완료된 비디오 썸네일
-                <>
-                  <video
-                    src={item.completedUrl}
-                    className="h-full w-full object-cover"
-                    muted
-                    preload="metadata"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                    <Play className="h-6 w-6 text-white" />
-                  </div>
-                </>
-              ) : item.status === 'processing' ? (
-                // 생성 중
-                <div className="flex h-full w-full flex-col items-center justify-center gap-1">
-                  <Loader2 className="h-5 w-5 animate-spin text-[var(--color-neon-pink)]" />
-                  <span className="text-[10px] text-white/60">렌더링 중</span>
+            {item.status === 'completed' && item.completedUrl ? (
+              // 완료된 비디오 썸네일
+              <>
+                <video
+                  src={item.completedUrl}
+                  className="h-full w-full object-cover"
+                  muted
+                  preload="metadata"
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                  <Play className="h-6 w-6 text-white" />
                 </div>
-              ) : (
-                // 대기 중
-                <div className="h-full w-full animate-pulse bg-gradient-to-br from-white/10 to-white/5" />
-              )}
-            </div>
+              </>
+            ) : item.status === 'processing' ? (
+              // 생성 중
+              <div className="flex h-full w-full flex-col items-center justify-center gap-2">
+                <Loader2 className="h-6 w-6 animate-spin text-[var(--color-neon-pink)]" />
+                <span className="text-xs text-white/60">렌더링 중</span>
+              </div>
+            ) : (
+              // 대기 중
+              <div className="h-full w-full animate-pulse bg-gradient-to-br from-white/10 to-white/5" />
+            )}
 
             {/* 하단 정보 */}
             <div
               className={cn(
-                'absolute bottom-0 left-0 right-0 px-1 py-0.5 text-center text-[10px]',
+                'absolute bottom-0 left-0 right-0 py-1 text-center text-xs',
                 item.status === 'completed'
                   ? 'bg-[var(--color-neon-lime)]/80 text-black font-medium'
                   : item.status === 'processing'

@@ -29,6 +29,32 @@ export function GeneratingPreview({
   const { previewType } = config
   const { items = [], total, message } = progress
 
+  // previewType별 기본 스켈레톤 개수 (batchSize가 없거나 1일 때 사용)
+  // generateAction으로 더 정확한 기본값 결정
+  const getDefaultCount = (type: string, action?: string): number => {
+    // generateAction 기반 특수 케이스
+    if (action?.includes('expand')) {
+      // 앵커 확장: 캐릭터 3개×3변형 + 배경 3개×1변형 = 12
+      return 12
+    }
+
+    switch (type) {
+      case 'image-grid':
+        return 6 // 캐릭터 + 배경 앵커
+      case 'shot-gallery':
+        return 6 // 6-Act 기준 샷
+      case 'video-timeline':
+        return 6 // 6-Act 기준 비디오
+      case 'audio-player':
+        return 8 // TTS 6개 + BGM 2개
+      default:
+        return 5
+    }
+  }
+
+  // total이 1 이하면 기본값 사용 (batchSize가 없는 경우)
+  const effectiveCount = total > 1 ? total : getDefaultCount(previewType, config.generateAction)
+
   // 스켈레톤 렌더링
   const renderSkeleton = () => {
     switch (previewType) {
@@ -36,7 +62,7 @@ export function GeneratingPreview({
       case 'shot-gallery':
         return (
           <ImageGridSkeleton
-            count={total || 5}
+            count={effectiveCount}
             items={items}
             completedUrls={completedUrls}
           />
@@ -45,7 +71,7 @@ export function GeneratingPreview({
       case 'video-timeline':
         return (
           <VideoTimelineSkeleton
-            count={total || 5}
+            count={effectiveCount}
             duration={10}
             items={items}
             completedUrls={completedUrls}
@@ -55,7 +81,7 @@ export function GeneratingPreview({
       case 'audio-player':
         return (
           <AudioPlayerSkeleton
-            count={total || 7}
+            count={effectiveCount}
             items={items}
             currentStage={message}
           />

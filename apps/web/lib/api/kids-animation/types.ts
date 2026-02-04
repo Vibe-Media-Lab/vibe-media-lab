@@ -37,6 +37,7 @@ const ZootopiaActSchema = z.object({
   narration: z.string(),
   visualPrompt: z.string(),
   emotion: z.string(),
+  cameraAngle: z.string().optional(), // wide shot, close-up, medium shot, etc.
 })
 
 const EnhancedPlotSchema = z.object({
@@ -55,6 +56,8 @@ const CharacterSchema = z.object({
   species: z.string(),
   personality: z.string(),
   visualDescription: z.string(),
+  goal: z.string(), // 캐릭터의 목표/욕망
+  flaw: z.string(), // 극복해야 할 약점
   voiceId: z.string().optional(),
   speakingStyle: z.string().optional(),
 })
@@ -70,6 +73,7 @@ const SettingSchema = z.object({
 // Flexible story schema (accepts both legacy and enhanced)
 const FlexibleStorySchema = z.object({
   title: z.string(),
+  logline: z.string().optional(), // 한 문장 스토리 요약
   lesson: z.string(),
   synopsis: z.string(),
   // Optional enhanced fields
@@ -77,6 +81,7 @@ const FlexibleStorySchema = z.object({
   setting: SettingSchema.optional(),
   // Plot can be either format
   plot: z.union([LegacyPlotSchema, EnhancedPlotSchema]),
+  bgmDirection: z.string().optional(), // BGM 음악적 방향
 })
 
 export const ScriptRequestSchema = z.object({
@@ -142,6 +147,7 @@ export const AudioRequestSchema = z.object({
     narration: z.string(),
   })),
   bgmPrompt: z.string(),
+  bgmDirection: z.string().optional(), // Story에서 가져온 BGM 방향 (우선순위 높음)
 })
 export type AudioRequest = z.infer<typeof AudioRequestSchema>
 

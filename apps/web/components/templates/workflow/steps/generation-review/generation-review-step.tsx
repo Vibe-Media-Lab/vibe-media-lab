@@ -116,6 +116,7 @@ export function GenerationReviewStep({
   })
   const [error, setError] = React.useState<string | null>(null)
   const [selectedBgmIndex, setSelectedBgmIndex] = React.useState<number>(0)
+  const [completedUrls, setCompletedUrls] = React.useState<Record<string, string>>({})
 
   // Reset status when stepId changes (switching between steps)
   React.useEffect(() => {
@@ -129,6 +130,7 @@ export function GenerationReviewStep({
       total: 0,
       message: '',
     })
+    setCompletedUrls({})
   }, [stepId, value, config.previewType])
 
   // Helper to unwrap API response: { success, data: { ... }, meta } -> { ... }
@@ -279,6 +281,122 @@ export function GenerationReviewStep({
     return actionMap[config.generateAction || ''] || ''
   }
 
+  // SSE 스트림 처리 (비디오 생성용)
+  const handleSSEGenerate = async (
+    endpoint: string,
+    requestBody: Record<string, unknown>,
+    items: GenerationProgressItem[]
+  ) => {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || `API 오류: ${response.status}`)
+    }
+
+    const reader = response.body?.getReader()
+    if (!reader) {
+      throw new Error('스트림을 읽을 수 없습니다')
+    }
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+
+        try {
+          const event = JSON.parse(line.slice(6)) as {
+            type: 'progress' | 'item_complete' | 'complete' | 'error'
+            data: {
+              current?: number
+              total?: number
+              itemId?: string
+              itemIndex?: number
+              videoUrl?: string
+              message?: string
+              shots?: Array<{ id: string; shotNumber: number; videoUrl: string }>
+              sessionId?: string
+            }
+          }
+
+          switch (event.type) {
+            case 'progress':
+              setProgress((prev) => ({
+                ...prev,
+                current: event.data.current ?? prev.current,
+                total: event.data.total ?? prev.total,
+                message: event.data.message || prev.message,
+              }))
+              break
+
+            case 'item_complete':
+              if (event.data.itemId && event.data.videoUrl) {
+                setCompletedUrls((prev) => ({
+                  ...prev,
+                  [event.data.itemId!]: event.data.videoUrl!,
+                }))
+              }
+
+              setProgress((prev) => {
+                const updatedItems = (prev.items ?? []).map((item, idx) => {
+                  if (idx === event.data.itemIndex) {
+                    return {
+                      ...item,
+                      status: event.data.videoUrl ? 'completed' as const : 'failed' as const,
+                    }
+                  }
+                  if (idx === (event.data.itemIndex ?? 0) + 1) {
+                    return { ...item, status: 'processing' as const }
+                  }
+                  return item
+                })
+
+                return {
+                  ...prev,
+                  current: event.data.current ?? prev.current,
+                  message: event.data.message || prev.message,
+                  items: updatedItems,
+                }
+              })
+              break
+
+            case 'complete':
+              onChange({
+                data: {
+                  success: true,
+                  data: {
+                    sessionId: event.data.sessionId,
+                    shots: event.data.shots,
+                  },
+                },
+                generatedAt: new Date(),
+              })
+              setStatus('reviewing')
+              return
+
+            case 'error':
+              throw new Error(event.data.message || '비디오 생성 실패')
+          }
+        } catch (parseError) {
+          console.warn('SSE 파싱 오류:', parseError)
+        }
+      }
+    }
+  }
+
   const handleGenerate = async () => {
     setStatus('generating')
     setError(null)
@@ -306,10 +424,52 @@ export function GenerationReviewStep({
       const requestBody = buildRequestBody()
 
       if (endpoint) {
-        setProgress((prev) => ({
-          ...prev,
-          message: 'API 호출 중...',
-        }))
+        // 비디오 생성은 SSE로 처리
+        if (config.generateAction === 'kids/videos') {
+          // shots 데이터에서 아이템 정보 추출
+          const shotsData = requestBody.shots as Array<{ id: string }> | undefined
+          const videoItems: GenerationProgressItem[] = shotsData
+            ? shotsData.map((shot, i) => ({
+                id: shot.id,
+                label: `Shot ${i + 1}`,
+                status: 'pending' as const,
+              }))
+            : items
+
+          // 첫 번째 항목을 processing으로
+          const initialItems = videoItems.map((item, idx) => ({
+            ...item,
+            status: idx === 0 ? 'processing' as const : 'pending' as const,
+          }))
+
+          setProgress((prev) => ({
+            ...prev,
+            total: videoItems.length,
+            message: '비디오 생성 시작...',
+            items: initialItems,
+          }))
+
+          await handleSSEGenerate(endpoint, requestBody, initialItems)
+          return
+        }
+
+        // 다른 엔드포인트는 기존 방식
+        setProgress((prev) => {
+          const prevItems = prev.items ?? []
+          const processingItems = prevItems.length > 0
+            ? prevItems.map((item) => ({ ...item, status: 'processing' as const }))
+            : Array.from({ length: prev.total || 6 }, (_, i) => ({
+                id: `item-${i + 1}`,
+                label: `#${i + 1}`,
+                status: 'processing' as const,
+              }))
+
+          return {
+            ...prev,
+            message: 'API 호출 중...',
+            items: processingItems,
+          }
+        })
 
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -509,6 +669,7 @@ export function GenerationReviewStep({
           <GeneratingPreview
             config={config}
             progress={progress}
+            completedUrls={completedUrls}
           />
         )}
 

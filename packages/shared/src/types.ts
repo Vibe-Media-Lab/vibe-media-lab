@@ -344,52 +344,40 @@ export interface KidsCharacter {
   species: string // 동물 또는 캐릭터 종류 (예: "bunny", "fox", "lion")
   personality: string // 성격 (예: "eager, idealistic")
   visualDescription: string // 비주얼 묘사 (이미지 생성용)
+  goal: string // 캐릭터의 목표/욕망 (예: "최고의 요리사가 되고 싶다")
+  flaw: string // 극복해야 할 약점 (예: "성급함, 남의 말을 안 듣는다")
   voiceId?: string // TTS 음성 ID
   speakingStyle?: string // 말투 스타일 (예: "energetic, fast")
 }
 
+// Act 정보 인터페이스
+export interface KidsActInfo {
+  title: string // 예: "꿈의 시작"
+  summary?: string // 1-2문장 요약 (optional)
+  narration: string // 나레이션 텍스트
+  visualPrompt: string // 영어 비주얼 프롬프트
+  emotion: string // 감정 (hopeful, curious, etc.)
+  cameraAngle?: string // 카메라 앵글 (wide shot, close-up, medium shot, etc.)
+}
+
 // 6-Act Zootopia Protocol Plot
 export interface KidsZootopiaPlot {
-  hook: {
-    title: string // 예: "꿈의 시작"
-    summary: string // 1-2문장 요약
-    narration: string // 나레이션 텍스트
-    visualPrompt: string // 영어 비주얼 프롬프트
+  hook: KidsActInfo & {
     emotion: 'hopeful' | 'curious' | 'excited' | 'peaceful'
   }
-  duo: {
-    title: string // 예: "운명적 만남"
-    summary: string
-    narration: string
-    visualPrompt: string
+  duo: KidsActInfo & {
     emotion: 'surprised' | 'suspicious' | 'intrigued' | 'friendly'
   }
-  journey: {
-    title: string // 예: "함께하는 모험"
-    summary: string
-    narration: string
-    visualPrompt: string
+  journey: KidsActInfo & {
     emotion: 'determined' | 'adventurous' | 'struggling' | 'learning'
   }
-  twist: {
-    title: string // 예: "예상치 못한 위기"
-    summary: string
-    narration: string
-    visualPrompt: string
+  twist: KidsActInfo & {
     emotion: 'shocked' | 'betrayed' | 'sad' | 'confused'
   }
-  action: {
-    title: string // 예: "결전의 순간"
-    summary: string
-    narration: string
-    visualPrompt: string
+  action: KidsActInfo & {
     emotion: 'brave' | 'intense' | 'heroic' | 'united'
   }
-  resolution: {
-    title: string // 예: "새로운 시작"
-    summary: string
-    narration: string
-    visualPrompt: string
+  resolution: KidsActInfo & {
     emotion: 'joyful' | 'proud' | 'grateful' | 'hopeful'
   }
 }
@@ -397,6 +385,7 @@ export interface KidsZootopiaPlot {
 // 스토리 구조 (Enhanced with Zootopia Protocol)
 export interface KidsStory {
   title: string
+  logline: string // 한 문장 스토리 요약 (예: "용기 없는 토끼가 친구와 함께 두려움을 극복하는 이야기")
   lesson: string // 핵심 교훈
   synopsis: string
   characters: KidsCharacter[] // 캐릭터 프로필
@@ -407,6 +396,7 @@ export interface KidsStory {
     locationVisualDescriptions?: string[] // 장소별 시각적 설명 (영어, 이미지 생성용)
     atmosphere: string // 분위기 (예: "밝고 활기찬", "신비롭고 평화로운")
   }
+  bgmDirection: string // BGM 음악적 방향 (영어, 예: "Orchestral with playful woodwinds, building to heroic brass in climax")
 }
 
 // Legacy 호환용 기본 플롯 구조

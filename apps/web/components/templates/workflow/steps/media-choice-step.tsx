@@ -12,10 +12,10 @@ import {
   ArrowRight,
   X,
   ImagePlus,
-  FolderOpen,
   Heart,
   Download,
 } from 'lucide-react'
+import { ImageGridSkeleton } from './generation-review/skeletons'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
@@ -667,12 +667,13 @@ export function MediaChoiceStep({
 
     try {
       // Call the actual anchors API
+      // 모든 항목을 processing 상태로 변경 (API가 한 번에 모든 이미지 생성)
       setProgress((prev) => ({
         ...prev,
         message: 'API 호출 중...',
-        items: items.map((it, idx) => ({
+        items: items.map((it) => ({
           ...it,
-          status: idx === 0 ? ('processing' as const) : ('pending' as const),
+          status: 'processing' as const,
         })),
       }))
 
@@ -943,22 +944,20 @@ export function MediaChoiceStep({
 
         {/* Generating State */}
         {status === 'generating' && (
-          <div className="flex flex-col items-center gap-4 py-4">
-            <Loader2 className="h-12 w-12 animate-spin text-[var(--color-neon-pink)]" />
-            <ProgressDisplay
-              progress={progress}
-              showPerItem={config.progress?.perItem}
+          <div className="w-full">
+            <ImageGridSkeleton
+              count={progress.total || 6}
+              items={progress.items}
+              completedUrls={generatedImages.reduce(
+                (acc, img) => {
+                  if (img.url) {
+                    acc[img.id] = img.url
+                  }
+                  return acc
+                },
+                {} as Record<string, string>
+              )}
             />
-
-            {/* Show generated images in real-time */}
-            {generatedImages.length > 0 && (
-              <div className="w-full pt-4">
-                <GeneratedPreview
-                  images={generatedImages}
-                  onRegenerateItem={handleRegenerateItem}
-                />
-              </div>
-            )}
           </div>
         )}
 

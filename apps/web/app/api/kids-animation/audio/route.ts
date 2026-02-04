@@ -23,7 +23,10 @@ export const POST = createApiHandler<AudioResponse>(
     const body = await request.json()
     const validated = AudioRequestSchema.parse(body)
 
-    const { sessionId, shots, bgmPrompt } = validated
+    const { sessionId, shots, bgmPrompt, bgmDirection } = validated
+
+    // BGM 프롬프트 결정: bgmDirection이 있으면 우선 사용, 없으면 bgmPrompt 사용
+    const finalBgmPrompt = bgmDirection || bgmPrompt
 
     // TTS 배치 태스크 준비 (동화책 읽어주는 톤)
     const ttsTasks = shots.map((shot) => ({
@@ -55,10 +58,13 @@ export const POST = createApiHandler<AudioResponse>(
     })
 
     // BGM 생성 (userId 전달하면 자동으로 Library에 저장됨)
-    logger.info('Starting BGM generation', { bgmPrompt: bgmPrompt.slice(0, 50) })
+    logger.info('Starting BGM generation', {
+      bgmPrompt: finalBgmPrompt.slice(0, 50),
+      usedBgmDirection: !!bgmDirection,
+    })
 
     const bgmResult = await generateBGM({
-      prompt: bgmPrompt,
+      prompt: finalBgmPrompt,
       instrumental: true,
       userId: user.id,
       sessionId,
