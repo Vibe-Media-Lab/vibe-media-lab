@@ -281,120 +281,107 @@ export function GenerationReviewStep({
     return actionMap[config.generateAction || ''] || ''
   }
 
-  // SSE 스트림 처리 (비디오 생성용)
-  const handleSSEGenerate = async (
+  // 순차적 비디오 생성 (클라이언트에서 하나씩 요청)
+  const handleSequentialVideoGenerate = async (
     endpoint: string,
-    requestBody: Record<string, unknown>,
-    items: GenerationProgressItem[]
+    shots: Array<{ id: string; shotNumber: number; duration: number; imageUrl: string; visualPrompt: string }>,
+    baseRequest: Record<string, unknown>
   ) => {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    })
+    const results: Array<{ id: string; shotNumber: number; videoUrl: string }> = []
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.error || `API 오류: ${response.status}`)
-    }
+    for (let i = 0; i < shots.length; i++) {
+      const shot = shots[i]
+      if (!shot) continue
 
-    const reader = response.body?.getReader()
-    if (!reader) {
-      throw new Error('스트림을 읽을 수 없습니다')
-    }
+      // 진행 상황 업데이트
+      setProgress((prev) => {
+        const updatedItems = (prev.items ?? []).map((item, idx) => ({
+          ...item,
+          status:
+            idx < i
+              ? ('completed' as const)
+              : idx === i
+                ? ('processing' as const)
+                : ('pending' as const),
+        }))
 
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-
-        try {
-          const event = JSON.parse(line.slice(6)) as {
-            type: 'progress' | 'item_complete' | 'complete' | 'error'
-            data: {
-              current?: number
-              total?: number
-              itemId?: string
-              itemIndex?: number
-              videoUrl?: string
-              message?: string
-              shots?: Array<{ id: string; shotNumber: number; videoUrl: string }>
-              sessionId?: string
-            }
-          }
-
-          switch (event.type) {
-            case 'progress':
-              setProgress((prev) => ({
-                ...prev,
-                current: event.data.current ?? prev.current,
-                total: event.data.total ?? prev.total,
-                message: event.data.message || prev.message,
-              }))
-              break
-
-            case 'item_complete':
-              if (event.data.itemId && event.data.videoUrl) {
-                setCompletedUrls((prev) => ({
-                  ...prev,
-                  [event.data.itemId!]: event.data.videoUrl!,
-                }))
-              }
-
-              setProgress((prev) => {
-                const updatedItems = (prev.items ?? []).map((item, idx) => {
-                  if (idx === event.data.itemIndex) {
-                    return {
-                      ...item,
-                      status: event.data.videoUrl ? 'completed' as const : 'failed' as const,
-                    }
-                  }
-                  if (idx === (event.data.itemIndex ?? 0) + 1) {
-                    return { ...item, status: 'processing' as const }
-                  }
-                  return item
-                })
-
-                return {
-                  ...prev,
-                  current: event.data.current ?? prev.current,
-                  message: event.data.message || prev.message,
-                  items: updatedItems,
-                }
-              })
-              break
-
-            case 'complete':
-              onChange({
-                data: {
-                  success: true,
-                  data: {
-                    sessionId: event.data.sessionId,
-                    shots: event.data.shots,
-                  },
-                },
-                generatedAt: new Date(),
-              })
-              setStatus('reviewing')
-              return
-
-            case 'error':
-              throw new Error(event.data.message || '비디오 생성 실패')
-          }
-        } catch (parseError) {
-          console.warn('SSE 파싱 오류:', parseError)
+        return {
+          ...prev,
+          current: i,
+          message: `비디오 ${i + 1}/${shots.length} 생성 중...`,
+          items: updatedItems,
         }
+      })
+
+      // 단일 비디오 생성 요청
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: baseRequest.sessionId,
+          shot,
+          formFactor: baseRequest.formFactor,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Shot ${i + 1} 생성 실패: ${response.status}`)
       }
+
+      const result = await response.json()
+      const videoUrl = result.data?.videoUrl || ''
+
+      // 결과 저장
+      results.push({
+        id: shot.id,
+        shotNumber: shot.shotNumber,
+        videoUrl,
+      })
+
+      // completedUrls 업데이트 (UI 즉시 반영)
+      if (videoUrl) {
+        setCompletedUrls((prev) => ({
+          ...prev,
+          [shot.id]: videoUrl,
+        }))
+      }
+
+      // 진행 상황 업데이트 (완료)
+      setProgress((prev) => {
+        const updatedItems = (prev.items ?? []).map((item, idx) => ({
+          ...item,
+          status:
+            idx <= i
+              ? (idx === i && !videoUrl ? 'failed' as const : 'completed' as const)
+              : idx === i + 1
+                ? ('processing' as const)
+                : ('pending' as const),
+        }))
+
+        return {
+          ...prev,
+          current: i + 1,
+          message: videoUrl
+            ? `비디오 ${i + 1}/${shots.length} 완료`
+            : `비디오 ${i + 1}/${shots.length} 실패`,
+          items: updatedItems,
+        }
+      })
     }
+
+    // 전체 완료
+    onChange({
+      data: {
+        success: true,
+        data: {
+          sessionId: baseRequest.sessionId,
+          shots: results,
+        },
+      },
+      generatedAt: new Date(),
+    })
+    setStatus('reviewing')
   }
 
   const handleGenerate = async () => {
@@ -424,17 +411,26 @@ export function GenerationReviewStep({
       const requestBody = buildRequestBody()
 
       if (endpoint) {
-        // 비디오 생성은 SSE로 처리
+        // 비디오 생성은 순차 요청으로 처리
         if (config.generateAction === 'kids/videos') {
           // shots 데이터에서 아이템 정보 추출
-          const shotsData = requestBody.shots as Array<{ id: string }> | undefined
-          const videoItems: GenerationProgressItem[] = shotsData
-            ? shotsData.map((shot, i) => ({
-                id: shot.id,
-                label: `Shot ${i + 1}`,
-                status: 'pending' as const,
-              }))
-            : items
+          const shotsData = requestBody.shots as Array<{
+            id: string
+            shotNumber: number
+            duration: number
+            imageUrl: string
+            visualPrompt: string
+          }> | undefined
+
+          if (!shotsData || shotsData.length === 0) {
+            throw new Error('비디오 생성할 샷 데이터가 없습니다')
+          }
+
+          const videoItems: GenerationProgressItem[] = shotsData.map((shot, i) => ({
+            id: shot.id,
+            label: `Shot ${i + 1}`,
+            status: 'pending' as const,
+          }))
 
           // 첫 번째 항목을 processing으로
           const initialItems = videoItems.map((item, idx) => ({
@@ -449,7 +445,7 @@ export function GenerationReviewStep({
             items: initialItems,
           }))
 
-          await handleSSEGenerate(endpoint, requestBody, initialItems)
+          await handleSequentialVideoGenerate(endpoint, shotsData, requestBody)
           return
         }
 

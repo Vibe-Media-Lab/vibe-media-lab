@@ -126,6 +126,21 @@ export const ShotsRequestSchema = z.object({
 })
 export type ShotsRequest = z.infer<typeof ShotsRequestSchema>
 
+// 단일 비디오 생성 요청 (클라이언트 순차 호출용)
+export const VideoRequestSchema = z.object({
+  sessionId: z.string(),
+  shot: z.object({
+    id: z.string(),
+    shotNumber: z.number(),
+    duration: z.number(),
+    imageUrl: z.string(),
+    visualPrompt: z.string(),
+  }),
+  formFactor: z.enum(['longform', 'shortform']).default('longform'),
+})
+export type VideoRequest = z.infer<typeof VideoRequestSchema>
+
+// Legacy: 다중 비디오 요청 (deprecated - SSE 방식)
 export const VideosRequestSchema = z.object({
   sessionId: z.string(),
   shots: z.array(z.object({
