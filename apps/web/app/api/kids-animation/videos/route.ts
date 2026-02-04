@@ -6,8 +6,8 @@ import { createClient } from '@/lib/supabase/server'
 
 const logger = getLogger('kids-animation/videos')
 
-// API 라우트 타임아웃 설정 (10분 - SSE 스트리밍용)
-export const maxDuration = 600
+// API 라우트 타임아웃 설정 (5분 - Vercel Hobby 플랜 최대)
+export const maxDuration = 300
 
 /**
  * SSE 이벤트 타입
