@@ -316,7 +316,6 @@ export const KidsAnimationStyleSchema = z.enum([
   'pixar',
   'disney',
   'dreamworks',
-  'ghibli',
 ])
 export type KidsAnimationStyle = z.infer<typeof KidsAnimationStyleSchema>
 
@@ -326,7 +325,6 @@ export const KidsThumbnailStyleSchema = z.enum([
   'pixar',
   'disney',
   'dreamworks',
-  'ghibli',
 ])
 export type KidsThumbnailStyle = z.infer<typeof KidsThumbnailStyleSchema>
 
@@ -495,6 +493,7 @@ export interface KidsAnchor {
   name: string
   description: string
   originalUrl?: string // 사용자 업로드
+  dbId?: string // Library에 저장된 레코드 ID
   expandedUrls?: string[] // AI 확장 변형
 }
 

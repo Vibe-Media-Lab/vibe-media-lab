@@ -88,7 +88,7 @@ export function SiteHeader() {
                 asChild
                 className="text-white/60 hover:text-white hover:bg-white/10"
               >
-                <Link href="/studio">Studio</Link>
+                <Link href="/library">Library</Link>
               </Button>
               <ProfileDropdown user={user} />
             </div>

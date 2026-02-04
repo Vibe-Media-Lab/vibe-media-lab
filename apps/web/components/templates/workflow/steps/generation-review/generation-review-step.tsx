@@ -19,7 +19,77 @@ import type {
   StepStatus,
 } from './types'
 import { ProgressDisplay } from './progress-display'
+import { GeneratingPreview } from './generating-preview'
 import { Preview } from './preview'
+
+// 실제로 유효한 데이터가 있는지 확인
+function hasValidGeneratedData(val: unknown, previewType: string): boolean {
+  if (!val) return false
+
+  const data = (val as { data?: unknown })?.data
+  if (!data) return false
+
+  // API response unwrap: { success, data: { ... } } -> { ... }
+  let unwrapped: unknown = data
+  if (typeof data === 'object' && data !== null && 'success' in data && 'data' in data) {
+    unwrapped = (data as { data: unknown }).data
+  }
+
+  switch (previewType) {
+    case 'video-timeline': {
+      // shots 배열이 있고, 최소 하나의 shot에 videoUrl이 있어야 함
+      const videoData = unwrapped as { shots?: Array<{ videoUrl?: string }> }
+      if (!videoData?.shots?.length) return false
+      return videoData.shots.some(shot => shot.videoUrl && shot.videoUrl.length > 0)
+    }
+
+    case 'image-grid':
+    case 'shot-gallery': {
+      // 배열이 있고, 최소 하나의 항목에 url/imageUrl이 있어야 함
+      if (Array.isArray(unwrapped)) {
+        return unwrapped.some(item => item?.url || item?.imageUrl)
+      }
+      // expanded 응답 (expand API): { expanded: [...] }
+      const expandedData = unwrapped as { expanded?: Array<{ url?: string }> }
+      if (expandedData?.expanded?.length) {
+        return expandedData.expanded.some(item => item.url && item.url.length > 0)
+      }
+      // anchors 응답 (anchors API): { anchors: [...] }
+      const anchorsData = unwrapped as { anchors?: Array<{ url?: string }> }
+      if (anchorsData?.anchors?.length) {
+        return anchorsData.anchors.some(item => item.url && item.url.length > 0)
+      }
+      // shots 응답 (shots API): { shots: [...] }
+      const shotsData = unwrapped as { shots?: Array<{ imageUrl?: string }> }
+      if (shotsData?.shots?.length) {
+        return shotsData.shots.some(shot => shot.imageUrl && shot.imageUrl.length > 0)
+      }
+      return false
+    }
+
+    case 'audio-player': {
+      // tts나 bgmTracks에 url이 있어야 함
+      const audioData = unwrapped as { tts?: Array<{ audioUrl?: string }>; bgmTracks?: Array<{ url?: string }> }
+      const hasTts = audioData?.tts?.some(t => t.audioUrl && t.audioUrl.length > 0)
+      const hasBgm = audioData?.bgmTracks?.some(t => t.url && t.url.length > 0)
+      return !!(hasTts || hasBgm)
+    }
+
+    case 'video-player': {
+      // final 응답: videoUrl 또는 thumbnailUrl이 있으면 유효
+      const finalData = unwrapped as { videoUrl?: string; thumbnailUrl?: string }
+      return !!(finalData?.videoUrl || finalData?.thumbnailUrl)
+    }
+
+    case 'text':
+    case 'shot-list':
+      // 텍스트나 shot-list는 데이터가 있으면 유효
+      return !!unwrapped
+
+    default:
+      return !!unwrapped
+  }
+}
 
 export function GenerationReviewStep({
   stepId,
@@ -32,8 +102,10 @@ export function GenerationReviewStep({
   inputContext,
   sessionId,
 }: GenerationReviewStepProps) {
+  const hasValidData = hasValidGeneratedData(value, config.previewType)
+
   const [status, setStatus] = React.useState<StepStatus>(
-    value ? 'reviewing' : 'idle'
+    hasValidData ? 'reviewing' : 'idle'
   )
   const [progress, setProgress] = React.useState<GenerationProgress>({
     stepId,
@@ -43,10 +115,12 @@ export function GenerationReviewStep({
     message: '',
   })
   const [error, setError] = React.useState<string | null>(null)
+  const [selectedBgmIndex, setSelectedBgmIndex] = React.useState<number>(0)
 
   // Reset status when stepId changes (switching between steps)
   React.useEffect(() => {
-    setStatus(value ? 'reviewing' : 'idle')
+    const isValid = hasValidGeneratedData(value, config.previewType)
+    setStatus(isValid ? 'reviewing' : 'idle')
     setError(null)
     setProgress({
       stepId,
@@ -55,7 +129,7 @@ export function GenerationReviewStep({
       total: 0,
       message: '',
     })
-  }, [stepId, value])
+  }, [stepId, value, config.previewType])
 
   // Helper to unwrap API response: { success, data: { ... }, meta } -> { ... }
   const unwrapApiResponse = <T,>(stepData: { data?: { success?: boolean; data?: T } } | undefined): T | undefined => {
@@ -153,6 +227,40 @@ export function GenerationReviewStep({
           bgmPrompt: (script as { bgmPrompt?: string })?.bgmPrompt || '',
         }
 
+      case 'kids/final': {
+        // videos와 audio 응답에서 데이터 추출
+        const videosData = inputContext?.videos as { data?: { success?: boolean; data?: { shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> } } } | undefined
+        const audioData = inputContext?.audio as { data?: { success?: boolean; data?: { tts?: Array<{ id: string; audioUrl: string; duration: number }>; bgmTracks?: Array<{ id: string; url: string; duration: number }> } } } | undefined
+
+        const videosResponse = videosData?.data?.data || videosData?.data as { shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> } | undefined
+        const audioResponse = audioData?.data?.data || audioData?.data as { tts?: Array<{ id: string; audioUrl: string; duration: number }>; bgmTracks?: Array<{ id: string; url: string; duration: number }> } | undefined
+
+        // shots 데이터 병합 (video + audio)
+        const videoShots = videosResponse?.shots || []
+        const ttsData = audioResponse?.tts || []
+        // BGM: 사용자가 선택한 트랙 사용
+        const bgmUrl = audioResponse?.bgmTracks?.[selectedBgmIndex]?.url || audioResponse?.bgmTracks?.[0]?.url || ''
+
+        const mergedShots = videoShots.map((vShot) => {
+          const tts = ttsData.find((t) => t.id === vShot.id)
+          return {
+            id: vShot.id,
+            shotNumber: vShot.shotNumber,
+            duration: tts?.duration || 10,
+            videoUrl: vShot.videoUrl || '',
+            audioUrl: tts?.audioUrl || '',
+          }
+        })
+
+        return {
+          sessionId: baseRequest.sessionId,
+          shots: mergedShots,
+          bgmUrl,
+          style: baseRequest.style,
+          songVersion: false,
+        }
+      }
+
       default:
         return baseRequest
     }
@@ -226,6 +334,7 @@ export function GenerationReviewStep({
 
       await mockGenerate(total, items)
     } catch (err) {
+      console.error('[GenerationReview] Error caught:', err)
       setError(err instanceof Error ? err.message : '생성에 실패했습니다')
       setStatus('failed')
     }
@@ -326,8 +435,19 @@ export function GenerationReviewStep({
     handleGenerate()
   }
 
-  const handleRegenerateItem = async (_itemId: string) => {
+  const handleRegenerateItem = async (itemId: string) => {
     // TODO: Implement individual item regeneration
+    console.log('Regenerate item:', itemId)
+  }
+
+  const handleLikeItem = async (itemId: string) => {
+    // TODO: Implement like functionality (save to library favorites)
+    console.log('Like item:', itemId)
+  }
+
+  const handleDownloadItem = async (itemId: string, url: string) => {
+    // Default download is handled in preview components
+    console.log('Download item:', itemId, url)
   }
 
   const handleApprove = () => {
@@ -386,13 +506,10 @@ export function GenerationReviewStep({
 
         {/* Generating State */}
         {status === 'generating' && (
-          <>
-            <Loader2 className="h-12 w-12 animate-spin text-[var(--color-neon-pink)]" />
-            <ProgressDisplay
-              progress={progress}
-              showPerItem={config.progress?.perItem}
-            />
-          </>
+          <GeneratingPreview
+            config={config}
+            progress={progress}
+          />
         )}
 
         {/* Reviewing State */}
@@ -403,9 +520,11 @@ export function GenerationReviewStep({
               data={value.data}
               editable={config.editable}
               onEdit={handleEdit}
-              onRegenerateItem={
-                config.regeneratable ? handleRegenerateItem : undefined
-              }
+              onRegenerateItem={handleRegenerateItem}
+              onLikeItem={handleLikeItem}
+              onDownloadItem={handleDownloadItem}
+              selectedBgmIndex={selectedBgmIndex}
+              onSelectBgm={setSelectedBgmIndex}
             />
 
             <div className="flex justify-center gap-3 pt-4">

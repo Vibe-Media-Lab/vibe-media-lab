@@ -1,22 +1,40 @@
 /**
  * Image Storage Service
  *
- * Handles saving generated images to public folder
- * and returning accessible URLs
+ * Primary: Supabase Storage (cloud, accessible anywhere)
+ * Fallback: Local public/generated folder
  */
 
 import { mkdir, writeFile, unlink, readdir, stat } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import { createClient } from '@supabase/supabase-js'
 
-// Storage configuration
+// Supabase configuration
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+const BUCKET_NAME = 'media-assets'
+
+// Local storage configuration (fallback)
 const PUBLIC_DIR = join(process.cwd(), 'public')
 const GENERATED_DIR = join(PUBLIC_DIR, 'generated')
 const GENERATED_URL_PREFIX = '/generated'
 
-// Cleanup configuration
-const MAX_AGE_MS = 24 * 60 * 60 * 1000 // 24 hours
-const MAX_FILES = 1000
+// Check if Supabase Storage is available
+const USE_SUPABASE = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY)
+
+// Create Supabase client with service role for storage operations
+function getSupabaseAdmin() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    throw new Error('Supabase credentials not configured')
+  }
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+}
 
 // ============================================================
 // Types
@@ -34,37 +52,25 @@ export interface SaveImageParams {
   mimeType?: string
   prefix?: string
   sessionId?: string
+  userId?: string
 }
 
 // ============================================================
-// Storage Functions
+// Helper Functions
 // ============================================================
 
-/**
- * Ensure generated directory exists
- */
-async function ensureGeneratedDir(): Promise<void> {
-  if (!existsSync(GENERATED_DIR)) {
-    await mkdir(GENERATED_DIR, { recursive: true })
-  }
-}
-
-/**
- * Get file extension from mime type
- */
 function getExtension(mimeType: string): string {
   const mimeMap: Record<string, string> = {
     'image/png': 'png',
     'image/jpeg': 'jpg',
     'image/webp': 'webp',
     'image/gif': 'gif',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
   }
   return mimeMap[mimeType] || 'png'
 }
 
-/**
- * Generate unique filename
- */
 function generateFilename(prefix: string, sessionId: string | undefined, ext: string): string {
   const timestamp = Date.now()
   const random = Math.random().toString(36).substring(2, 8)
@@ -72,10 +78,71 @@ function generateFilename(prefix: string, sessionId: string | undefined, ext: st
   return `${prefix}-${session}${timestamp}-${random}.${ext}`
 }
 
-/**
- * Save base64 image to public/generated folder
- */
-export async function saveImage(params: SaveImageParams): Promise<SaveImageResult> {
+async function ensureGeneratedDir(): Promise<void> {
+  if (!existsSync(GENERATED_DIR)) {
+    await mkdir(GENERATED_DIR, { recursive: true })
+  }
+}
+
+// ============================================================
+// Supabase Storage Functions
+// ============================================================
+
+async function saveImageToSupabase(params: SaveImageParams): Promise<SaveImageResult> {
+  try {
+    const supabase = getSupabaseAdmin()
+    const {
+      base64,
+      mimeType = 'image/png',
+      prefix = 'img',
+      sessionId,
+      userId = 'anonymous',
+    } = params
+
+    const ext = getExtension(mimeType)
+    const filename = generateFilename(prefix, sessionId, ext)
+    const mediaType = mimeType.startsWith('video/') ? 'video' : 'image'
+    const path = `${userId}/${mediaType}/${filename}`
+
+    // Decode base64 to buffer
+    const buffer = Buffer.from(base64, 'base64')
+
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(path, buffer, {
+        contentType: mimeType,
+        upsert: false,
+      })
+
+    if (uploadError) {
+      throw new Error(uploadError.message)
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(path)
+
+    return {
+      success: true,
+      url: urlData.publicUrl,
+      filePath: path,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save to Supabase'
+    return {
+      success: false,
+      error: message,
+    }
+  }
+}
+
+// ============================================================
+// Local Storage Functions (Fallback)
+// ============================================================
+
+async function saveImageLocally(params: SaveImageParams): Promise<SaveImageResult> {
   try {
     await ensureGeneratedDir()
 
@@ -111,6 +178,26 @@ export async function saveImage(params: SaveImageParams): Promise<SaveImageResul
   }
 }
 
+// ============================================================
+// Public API
+// ============================================================
+
+/**
+ * Save base64 image - uses Supabase Storage if available, local fallback otherwise
+ */
+export async function saveImage(params: SaveImageParams): Promise<SaveImageResult> {
+  if (USE_SUPABASE) {
+    const result = await saveImageToSupabase(params)
+    if (result.success) {
+      return result
+    }
+    // Fallback to local on Supabase failure
+    console.warn('Supabase upload failed, falling back to local:', result.error)
+  }
+
+  return saveImageLocally(params)
+}
+
 /**
  * Save multiple base64 images
  */
@@ -130,10 +217,26 @@ export async function saveImages(
  * Delete an image by URL or file path
  */
 export async function deleteImage(urlOrPath: string): Promise<boolean> {
+  // Check if it's a Supabase URL
+  if (SUPABASE_URL && urlOrPath.includes(SUPABASE_URL)) {
+    try {
+      const supabase = getSupabaseAdmin()
+      // Extract path from URL
+      const urlObj = new URL(urlOrPath)
+      const pathMatch = urlObj.pathname.match(/\/storage\/v1\/object\/public\/media-assets\/(.+)/)
+      if (pathMatch && pathMatch[1]) {
+        const { error } = await supabase.storage.from(BUCKET_NAME).remove([pathMatch[1]])
+        return !error
+      }
+    } catch {
+      return false
+    }
+  }
+
+  // Local file deletion
   try {
     let filePath = urlOrPath
 
-    // Convert URL to file path
     if (urlOrPath.startsWith(GENERATED_URL_PREFIX)) {
       const filename = urlOrPath.replace(GENERATED_URL_PREFIX + '/', '')
       filePath = join(GENERATED_DIR, filename)
@@ -151,58 +254,7 @@ export async function deleteImage(urlOrPath: string): Promise<boolean> {
 }
 
 /**
- * Cleanup old generated images
- */
-export async function cleanupOldImages(): Promise<{ deleted: number; errors: number }> {
-  let deleted = 0
-  let errors = 0
-
-  try {
-    if (!existsSync(GENERATED_DIR)) {
-      return { deleted, errors }
-    }
-
-    const files = await readdir(GENERATED_DIR)
-    const now = Date.now()
-
-    // Get file stats and sort by age
-    const fileStats = await Promise.all(
-      files.map(async (file) => {
-        const filePath = join(GENERATED_DIR, file)
-        try {
-          const stats = await stat(filePath)
-          return { file, filePath, mtime: stats.mtime.getTime() }
-        } catch {
-          return null
-        }
-      })
-    )
-
-    const validFiles = fileStats.filter((f): f is NonNullable<typeof f> => f !== null)
-    validFiles.sort((a, b) => a.mtime - b.mtime) // oldest first
-
-    for (const { filePath, mtime } of validFiles) {
-      const age = now - mtime
-      const shouldDelete = age > MAX_AGE_MS || validFiles.length - deleted > MAX_FILES
-
-      if (shouldDelete) {
-        try {
-          await unlink(filePath)
-          deleted++
-        } catch {
-          errors++
-        }
-      }
-    }
-  } catch {
-    errors++
-  }
-
-  return { deleted, errors }
-}
-
-/**
- * Get storage stats
+ * Get storage stats (local only)
  */
 export async function getStorageStats(): Promise<{
   fileCount: number
@@ -250,4 +302,11 @@ export async function getStorageStats(): Promise<{
   } catch {
     return { fileCount: 0, totalSizeBytes: 0 }
   }
+}
+
+/**
+ * Check which storage is being used
+ */
+export function getStorageProvider(): 'supabase' | 'local' {
+  return USE_SUPABASE ? 'supabase' : 'local'
 }

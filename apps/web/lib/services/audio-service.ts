@@ -14,12 +14,18 @@ import {
   isKieaiAvailable,
   KieaiError,
 } from './kieai-client'
+import { getLogger } from '@/lib/logger'
+
+const logger = getLogger('audio-service')
+import { saveToLibrary } from './library-saver'
 import type {
   TTSParams,
   TTSBatchParams,
   BGMParams,
   GenerationResult,
   BatchGenerationResult,
+  BGMTrack,
+  BGMGenerationResult,
 } from './types'
 
 const IS_MOCK = !isKieaiAvailable()
@@ -49,10 +55,42 @@ export async function generateTTS(params: TTSParams): Promise<GenerationResult> 
 
     const result = await waitForTask(taskId, { maxWaitMs: 120000 })
 
+    // resultJson이 문자열일 수 있음 - 파싱 필요
+    let parsedResult = result.resultJson
+    if (typeof result.resultJson === 'string') {
+      try {
+        parsedResult = JSON.parse(result.resultJson)
+      } catch {
+        parsedResult = {}
+      }
+    }
+
     const url =
-      result.resultJson?.url ||
-      result.resultJson?.audio_url ||
-      (result.resultJson?.urls as string[])?.[0]
+      parsedResult?.url ||
+      parsedResult?.audio_url ||
+      (parsedResult?.urls as string[])?.[0] ||
+      (parsedResult?.resultUrls as string[])?.[0]
+
+    const duration = estimateTTSDuration(params.text)
+
+    // 자동 Library 저장 (userId가 있을 때만)
+    if (url && params.userId) {
+      await saveToLibrary({
+        userId: params.userId,
+        mediaType: 'tts',
+        prompt: params.text,
+        outputUrl: url,
+        provider: 'kieai',
+        model: 'elevenlabs',
+        durationSeconds: duration,
+        config: {
+          sessionId: params.sessionId,
+          voice: params.voice || 'Rachel',
+          languageCode: params.languageCode || 'ko',
+          ...params.metadata,
+        },
+      })
+    }
 
     return {
       success: true,
@@ -62,7 +100,7 @@ export async function generateTTS(params: TTSParams): Promise<GenerationResult> 
         text: params.text.slice(0, 50) + (params.text.length > 50 ? '...' : ''),
         voice: params.voice || 'Rachel',
         languageCode: params.languageCode || 'ko',
-        estimatedDuration: estimateTTSDuration(params.text),
+        estimatedDuration: duration,
       },
     }
   } catch (error) {
@@ -78,9 +116,12 @@ export async function generateTTS(params: TTSParams): Promise<GenerationResult> 
 async function mockGenerateTTS(params: TTSParams): Promise<GenerationResult> {
   await new Promise((resolve) => setTimeout(resolve, 1000))
 
+  // Mock placeholder audio URL for testing
+  const mockAudioUrl = `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${Math.floor(Math.random() * 16) + 1}.mp3`
+
   return {
     success: true,
-    url: '',
+    url: mockAudioUrl,
     metadata: {
       text: params.text.slice(0, 50) + (params.text.length > 50 ? '...' : ''),
       voice: params.voice || 'Rachel',
@@ -111,10 +152,18 @@ export async function batchGenerateTTS(
     const task = params.tasks[i]
     if (!task) continue
 
+    // userId와 sessionId를 각 generateTTS 호출에 전달
     const result = await generateTTS({
       text: task.text,
       voice: task.voice,
       languageCode: params.languageCode,
+      speed: task.speed,
+      stability: task.stability,
+      similarityBoost: task.similarityBoost,
+      style: task.style,
+      userId: params.userId,
+      sessionId: params.sessionId,
+      metadata: { ...params.metadata, batchIndex: i },
     })
 
     results.push({
@@ -148,9 +197,12 @@ async function mockBatchGenerateTTS(
 
     await new Promise((resolve) => setTimeout(resolve, 800))
 
+    // Mock placeholder audio URL for testing
+    const mockAudioUrl = `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${(i % 16) + 1}.mp3`
+
     const result: GenerationResult = {
       success: true,
-      url: '',
+      url: mockAudioUrl,
       metadata: {
         text: task.text.slice(0, 30) + '...',
         voice: task.voice || 'Rachel',
@@ -162,7 +214,7 @@ async function mockBatchGenerateTTS(
     results.push({
       index: i,
       success: true,
-      url: result.url,
+      url: mockAudioUrl,
     })
 
     onProgress?.(i + 1, total, result)
@@ -180,12 +232,18 @@ async function mockBatchGenerateTTS(
 // BGM Generation (Suno)
 // ============================================================
 
-export async function generateBGM(params: BGMParams): Promise<GenerationResult> {
+export async function generateBGM(params: BGMParams): Promise<BGMGenerationResult> {
   if (IS_MOCK) {
+    logger.info('Using mock BGM generation')
     return mockGenerateBGM(params)
   }
 
   try {
+    logger.info('Creating BGM task', {
+      prompt: params.prompt.slice(0, 50),
+      model: params.model || 'V4_5',
+    })
+
     const taskId = await createMusicTask({
       prompt: params.prompt,
       instrumental: params.instrumental ?? true,
@@ -195,49 +253,127 @@ export async function generateBGM(params: BGMParams): Promise<GenerationResult> 
       customMode: true,
     })
 
+    logger.info('BGM task created', { taskId })
+
     const result = await waitForMusic(taskId, {
       maxWaitMs: 300000,
       pollIntervalMs: 5000,
+      onProgress: (state) => {
+        logger.debug('BGM task progress', { taskId, state })
+      },
     })
 
-    const firstTrack = result.data?.[0]
-    const url = firstTrack?.audio_url
+    // Handle both new format (response.sunoData) and legacy format (data)
+    const sunoData = result.response?.sunoData
+    const legacyData = result.data
+
+    logger.info('BGM task completed', {
+      taskId,
+      state: result.state,
+      hasSunoData: !!sunoData?.length,
+      hasLegacyData: !!legacyData?.length,
+    })
+
+    // Extract all valid tracks (Suno returns 2 tracks per request)
+    const tracks: BGMTrack[] = []
+
+    if (sunoData) {
+      for (const track of sunoData) {
+        const url = track.audioUrl || track.streamAudioUrl
+        if (url) {
+          tracks.push({
+            id: track.id,
+            url,
+            duration: track.duration || 90,
+            title: track.title,
+            imageUrl: track.imageUrl,
+          })
+        }
+      }
+    }
+
+    // Fallback to legacy format
+    if (tracks.length === 0 && legacyData) {
+      for (const track of legacyData) {
+        if (track.audio_url) {
+          tracks.push({
+            id: track.id,
+            url: track.audio_url,
+            duration: track.duration || 90,
+            title: track.title,
+          })
+        }
+      }
+    }
+
+    logger.info('BGM tracks extracted', { trackCount: tracks.length })
+
+    // 자동 Library 저장 (userId가 있을 때만, 모든 트랙 저장)
+    if (tracks.length > 0 && params.userId) {
+      for (const track of tracks) {
+        await saveToLibrary({
+          userId: params.userId,
+          mediaType: 'bgm',
+          prompt: params.prompt,
+          outputUrl: track.url,
+          provider: 'kieai',
+          model: params.model || 'suno-V4_5',
+          durationSeconds: track.duration,
+          config: {
+            sessionId: params.sessionId,
+            instrumental: params.instrumental ?? true,
+            title: track.title,
+            trackId: track.id,
+            ...params.metadata,
+          },
+        })
+      }
+    }
 
     return {
-      success: true,
-      url,
+      success: tracks.length > 0,
+      tracks,
       taskId,
-      metadata: {
-        prompt: params.prompt.slice(0, 50) + '...',
-        instrumental: params.instrumental ?? true,
-        model: params.model || 'V4_5',
-        duration: firstTrack?.duration || 90,
-        title: firstTrack?.title,
-      },
+      error: tracks.length === 0 ? 'No valid BGM tracks generated' : undefined,
     }
   } catch (error) {
     const message =
       error instanceof KieaiError ? error.message : 'BGM generation failed'
+
+    logger.error('BGM generation error', {
+      error: message,
+      errorType: error instanceof KieaiError ? 'KieaiError' : 'Unknown',
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+
     return {
       success: false,
+      tracks: [],
       error: message,
     }
   }
 }
 
-async function mockGenerateBGM(params: BGMParams): Promise<GenerationResult> {
+async function mockGenerateBGM(params: BGMParams): Promise<BGMGenerationResult> {
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
+  // Mock placeholder BGM URLs for testing (royalty-free music)
   return {
     success: true,
-    url: '',
-    metadata: {
-      prompt: params.prompt.slice(0, 50) + '...',
-      instrumental: params.instrumental ?? true,
-      model: params.model || 'V4_5',
-      estimatedDuration: 90,
-      mock: true,
-    },
+    tracks: [
+      {
+        id: 'mock-bgm-1',
+        url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+        duration: 90,
+        title: 'Mock BGM Track 1',
+      },
+      {
+        id: 'mock-bgm-2',
+        url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+        duration: 95,
+        title: 'Mock BGM Track 2',
+      },
+    ],
   }
 }
 

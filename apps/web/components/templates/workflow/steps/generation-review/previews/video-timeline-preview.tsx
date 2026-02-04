@@ -2,17 +2,55 @@
 
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { Loader2, Play, Pause, RotateCcw } from 'lucide-react'
+import { Loader2, Play, Pause, RotateCcw, Heart, Download } from 'lucide-react'
 import type { VideoItem } from '../types'
 
 interface VideoTimelinePreviewProps {
   data: VideoItem[]
   onRegenerateItem?: (id: string) => void
+  onLikeItem?: (id: string) => void
+  onDownloadItem?: (id: string, url: string) => void
 }
 
-export function VideoTimelinePreview({ data, onRegenerateItem }: VideoTimelinePreviewProps) {
+export function VideoTimelinePreview({ data, onRegenerateItem, onLikeItem, onDownloadItem }: VideoTimelinePreviewProps) {
   const [playingId, setPlayingId] = React.useState<string | null>(null)
+  const [likedItems, setLikedItems] = React.useState<Set<string>>(new Set())
   const videoRefs = React.useRef<Record<string, HTMLVideoElement | null>>({})
+
+  const handleLike = (id: string) => {
+    setLikedItems((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(id)) {
+        newSet.delete(id)
+      } else {
+        newSet.add(id)
+      }
+      return newSet
+    })
+    onLikeItem?.(id)
+  }
+
+  const handleDownload = async (id: string, url: string) => {
+    if (onDownloadItem) {
+      onDownloadItem(id, url)
+      return
+    }
+    // Default download behavior
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = `${id}.mp4`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(blobUrl)
+    } catch (err) {
+      console.error('Download failed:', err)
+    }
+  }
 
   const handlePlayPause = (id: string) => {
     const video = videoRefs.current[id]
@@ -39,7 +77,7 @@ export function VideoTimelinePreview({ data, onRegenerateItem }: VideoTimelinePr
           <div
             key={item.id}
             className="group relative flex-shrink-0 overflow-hidden rounded-lg"
-            style={{ width: `${Math.max(80, item.duration * 15)}px` }}
+            style={{ width: `${Math.max(160, item.duration * 30)}px` }}
           >
             <div className="relative aspect-video bg-white/10">
               {item.url ? (
@@ -79,17 +117,48 @@ export function VideoTimelinePreview({ data, onRegenerateItem }: VideoTimelinePr
             <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-center text-[10px] text-white">
               {item.duration}초
             </div>
-            {onRegenerateItem && (
-              <button
-                onClick={() => onRegenerateItem(item.id)}
-                className={cn(
-                  'absolute right-1 top-1 rounded-full bg-black/60 p-1',
-                  'opacity-0 transition-opacity group-hover:opacity-100'
-                )}
-              >
-                <RotateCcw className="h-2.5 w-2.5 text-white" />
-              </button>
-            )}
+            {/* Hover action buttons */}
+            <div className={cn(
+              'absolute right-1 top-1 flex gap-0.5',
+              'opacity-0 transition-opacity group-hover:opacity-100'
+            )}>
+              {item.url && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleLike(item.id)
+                    }}
+                    className="rounded-full bg-black/60 p-1 hover:bg-black/80"
+                    title="좋아요"
+                  >
+                    <Heart className={cn('h-2.5 w-2.5', likedItems.has(item.id) ? 'fill-red-500 text-red-500' : 'text-white')} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDownload(item.id, item.url!)
+                    }}
+                    className="rounded-full bg-black/60 p-1 hover:bg-black/80"
+                    title="다운로드"
+                  >
+                    <Download className="h-2.5 w-2.5 text-white" />
+                  </button>
+                </>
+              )}
+              {onRegenerateItem && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onRegenerateItem(item.id)
+                  }}
+                  className="rounded-full bg-black/60 p-1 hover:bg-black/80"
+                  title="재생성"
+                >
+                  <RotateCcw className="h-2.5 w-2.5 text-white" />
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

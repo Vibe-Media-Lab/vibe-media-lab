@@ -26,6 +26,7 @@ import {
   isKieaiAvailable,
   KieaiError,
 } from './kieai-client'
+import { saveToLibrary } from './library-saver'
 import type {
   ImageGenerateParams,
   ImageEditParams,
@@ -51,15 +52,39 @@ logger.info('Image service initialized', {
 export async function generateImage(
   params: ImageGenerateParams
 ): Promise<GenerationResult> {
+  let result: GenerationResult
+
   if (IS_MOCK) {
-    return mockGenerateImage(params)
+    result = await mockGenerateImage(params)
+  } else if (USE_GEMINI) {
+    result = await generateImageWithGemini(params)
+  } else {
+    result = await generateImageWithKieai(params)
   }
 
-  if (USE_GEMINI) {
-    return generateImageWithGemini(params)
+  // 자동 Library 저장 (userId가 있을 때만)
+  if (result.success && result.url && params.userId) {
+    const saveResult = await saveToLibrary({
+      userId: params.userId,
+      mediaType: 'image',
+      prompt: params.prompt,
+      outputUrl: result.url,
+      provider: result.metadata?.provider as string || getImageServiceProvider(),
+      model: result.metadata?.model as string || 'unknown',
+      config: {
+        sessionId: params.sessionId,
+        aspectRatio: params.aspectRatio,
+        resolution: params.resolution,
+        ...params.metadata,
+      },
+    })
+    // DB ID를 결과에 포함
+    if (saveResult.success && saveResult.id) {
+      result = { ...result, dbId: saveResult.id }
+    }
   }
 
-  return generateImageWithKieai(params)
+  return result
 }
 
 async function generateImageWithGemini(
@@ -188,15 +213,40 @@ async function mockGenerateImage(
 export async function editImage(
   params: ImageEditParams
 ): Promise<GenerationResult> {
+  let result: GenerationResult
+
   if (IS_MOCK) {
-    return mockEditImage(params)
+    result = await mockEditImage(params)
+  } else if (USE_GEMINI) {
+    result = await editImageWithGemini(params)
+  } else {
+    result = await editImageWithKieai(params)
   }
 
-  if (USE_GEMINI) {
-    return editImageWithGemini(params)
+  // 자동 Library 저장 (userId가 있을 때만)
+  if (result.success && result.url && params.userId) {
+    const saveResult = await saveToLibrary({
+      userId: params.userId,
+      mediaType: 'image',
+      prompt: params.prompt,
+      outputUrl: result.url,
+      provider: result.metadata?.provider as string || getImageServiceProvider(),
+      model: result.metadata?.model as string || 'unknown',
+      config: {
+        sessionId: params.sessionId,
+        aspectRatio: params.aspectRatio,
+        resolution: params.resolution,
+        referenceCount: params.referenceUrls.length,
+        ...params.metadata,
+      },
+    })
+    // DB ID를 결과에 포함
+    if (saveResult.success && saveResult.id) {
+      result = { ...result, dbId: saveResult.id }
+    }
   }
 
-  return editImageWithKieai(params)
+  return result
 }
 
 async function editImageWithGemini(
@@ -348,12 +398,16 @@ export async function batchEditImages(
     const task = params.tasks[i]
     if (!task) continue
 
+    // userId와 sessionId를 각 editImage 호출에 전달
     const result = await editImage({
       prompt: task.prompt,
       referenceUrls: task.referenceUrls,
       aspectRatio: params.aspectRatio,
       model: params.model,
       resolution: params.resolution,
+      userId: params.userId,
+      sessionId: params.sessionId,
+      metadata: { ...params.metadata, batchIndex: i },
     })
 
     results.push({

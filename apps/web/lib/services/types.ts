@@ -5,6 +5,19 @@
  */
 
 // ============================================================
+// Library Save Options (자동 저장용)
+// ============================================================
+
+export interface LibrarySaveOptions {
+  /** User ID - 제공하면 자동으로 Library에 저장 */
+  userId?: string
+  /** Session ID for grouping */
+  sessionId?: string
+  /** Additional metadata */
+  metadata?: Record<string, unknown>
+}
+
+// ============================================================
 // Image Generation
 // ============================================================
 
@@ -26,14 +39,14 @@ export type ImageModel =
 
 export type ImageResolution = '1K' | '2K' | '4K'
 
-export interface ImageGenerateParams {
+export interface ImageGenerateParams extends LibrarySaveOptions {
   prompt: string
   aspectRatio?: AspectRatio
   model?: ImageModel
   resolution?: ImageResolution
 }
 
-export interface ImageEditParams {
+export interface ImageEditParams extends LibrarySaveOptions {
   prompt: string
   referenceUrls: string[]
   aspectRatio?: AspectRatio
@@ -41,7 +54,7 @@ export interface ImageEditParams {
   resolution?: ImageResolution
 }
 
-export interface ImageBatchEditParams {
+export interface ImageBatchEditParams extends LibrarySaveOptions {
   tasks: Array<{
     prompt: string
     referenceUrls: string[]
@@ -61,7 +74,7 @@ export type VideoModel =
   | 'kling-2.6/image-to-video'
   | 'kling-2.6/text-to-video'
 
-export interface ImageToVideoParams {
+export interface ImageToVideoParams extends LibrarySaveOptions {
   imageUrl: string
   prompt: string
   duration?: VideoDuration
@@ -69,7 +82,7 @@ export interface ImageToVideoParams {
   tailImageUrl?: string
 }
 
-export interface TextToVideoParams {
+export interface TextToVideoParams extends LibrarySaveOptions {
   prompt: string
   duration?: VideoDuration
   aspectRatio?: '1:1' | '9:16' | '16:9'
@@ -107,7 +120,7 @@ export type TTSModel =
   | 'elevenlabs/text-to-speech-turbo-2-5'
   | 'elevenlabs/text-to-speech-multilingual-v2'
 
-export interface TTSParams {
+export interface TTSParams extends LibrarySaveOptions {
   text: string
   voice?: TTSVoice
   languageCode?: string
@@ -117,17 +130,21 @@ export interface TTSParams {
   style?: number
 }
 
-export interface TTSBatchParams {
+export interface TTSBatchParams extends LibrarySaveOptions {
   tasks: Array<{
     text: string
     voice?: TTSVoice
+    speed?: number
+    stability?: number
+    similarityBoost?: number
+    style?: number
   }>
   languageCode?: string
 }
 
 export type BGMModel = 'V3_5' | 'V4' | 'V4_5' | 'V4_5PLUS' | 'V5'
 
-export interface BGMParams {
+export interface BGMParams extends LibrarySaveOptions {
   prompt: string
   instrumental?: boolean
   model?: BGMModel
@@ -144,7 +161,23 @@ export interface GenerationResult {
   url?: string
   error?: string
   taskId?: string
+  dbId?: string // Library에 저장된 레코드 ID
   metadata?: Record<string, unknown>
+}
+
+export interface BGMTrack {
+  id: string
+  url: string
+  duration: number
+  title?: string
+  imageUrl?: string
+}
+
+export interface BGMGenerationResult {
+  success: boolean
+  tracks: BGMTrack[]
+  taskId?: string
+  error?: string
 }
 
 export interface BatchGenerationResult {
@@ -182,4 +215,49 @@ export interface ServiceStatus {
     available: boolean
     provider: 'gemini' | 'mock'
   }
+  composition: {
+    available: boolean
+    provider: 'fal' | 'mock'
+  }
+}
+
+// ============================================================
+// Video Composition
+// ============================================================
+
+export interface ComposeVideoShot {
+  id: string
+  shotNumber: number
+  duration: number
+  videoUrl: string
+  audioUrl: string
+}
+
+export interface ComposeVideoParams extends LibrarySaveOptions {
+  shots: ComposeVideoShot[]
+  bgmUrl: string
+  bgmVolume?: number // 기본값 0.3 (30%)
+  width?: number // 기본값 1920
+  height?: number // 기본값 1080
+  frameRate?: number // 기본값 30
+}
+
+export interface ComposeVideoResult {
+  success: boolean
+  videoUrl?: string
+  duration?: number
+  renderId?: string
+  error?: string
+}
+
+export interface ThumbnailGenerateParams extends LibrarySaveOptions {
+  title: string
+  style: string
+  characters?: string[]
+}
+
+export interface ThumbnailGenerateResult {
+  success: boolean
+  url?: string
+  error?: string
 }

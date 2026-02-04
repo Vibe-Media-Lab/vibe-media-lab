@@ -1,15 +1,55 @@
 'use client'
 
+import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { Sparkles, RotateCcw } from 'lucide-react'
+import { Sparkles, RotateCcw, Heart, Download } from 'lucide-react'
 import type { Shot } from '../types'
 
 interface ShotGalleryPreviewProps {
   data: unknown
   onRegenerateItem?: (id: string) => void
+  onLikeItem?: (id: string) => void
+  onDownloadItem?: (id: string, url: string) => void
 }
 
-export function ShotGalleryPreview({ data, onRegenerateItem }: ShotGalleryPreviewProps) {
+export function ShotGalleryPreview({ data, onRegenerateItem, onLikeItem, onDownloadItem }: ShotGalleryPreviewProps) {
+  const [likedItems, setLikedItems] = React.useState<Set<string>>(new Set())
+
+  const handleLike = (id: string) => {
+    setLikedItems((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(id)) {
+        newSet.delete(id)
+      } else {
+        newSet.add(id)
+      }
+      return newSet
+    })
+    onLikeItem?.(id)
+  }
+
+  const handleDownload = async (id: string, url: string) => {
+    if (onDownloadItem) {
+      onDownloadItem(id, url)
+      return
+    }
+    // Default download behavior
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = `${id}.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(blobUrl)
+    } catch (err) {
+      console.error('Download failed:', err)
+    }
+  }
+
   // Extract shots from API response format
   let unwrapped = data as Record<string, unknown>
   if (unwrapped && typeof unwrapped === 'object' && 'success' in unwrapped && 'data' in unwrapped) {
@@ -43,17 +83,48 @@ export function ShotGalleryPreview({ data, onRegenerateItem }: ShotGalleryPrevie
               <div className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-xs text-white">
                 #{shot.shotNumber} · {shot.duration}초
               </div>
-              {onRegenerateItem && (
-                <button
-                  onClick={() => onRegenerateItem(shot.id)}
-                  className={cn(
-                    'absolute right-2 top-2 rounded-full bg-black/60 p-1.5',
-                    'opacity-0 transition-opacity group-hover:opacity-100'
-                  )}
-                >
-                  <RotateCcw className="h-3 w-3 text-white" />
-                </button>
-              )}
+              {/* Hover action buttons */}
+              <div className={cn(
+                'absolute right-2 top-2 flex gap-1',
+                'opacity-0 transition-opacity group-hover:opacity-100'
+              )}>
+                {shot.imageUrl && (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleLike(shot.id)
+                      }}
+                      className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
+                      title="좋아요"
+                    >
+                      <Heart className={cn('h-3 w-3', likedItems.has(shot.id) ? 'fill-red-500 text-red-500' : 'text-white')} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDownload(shot.id, shot.imageUrl!)
+                      }}
+                      className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
+                      title="다운로드"
+                    >
+                      <Download className="h-3 w-3 text-white" />
+                    </button>
+                  </>
+                )}
+                {onRegenerateItem && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onRegenerateItem(shot.id)
+                    }}
+                    className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
+                    title="재생성"
+                  >
+                    <RotateCcw className="h-3 w-3 text-white" />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="p-3">
               <p className="text-sm text-white/80 line-clamp-2">

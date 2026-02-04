@@ -23,7 +23,7 @@ const logger = getLogger('kids-animation/anchors')
  * - 배경: formFactor에 따라 16:9 또는 9:16, 2K
  */
 export const POST = createApiHandler<AnchorsResponse>(
-  async (request) => {
+  async (request, { user }) => {
     const body = await request.json()
     const validated = AnchorsRequestSchema.parse(body)
 
@@ -57,11 +57,19 @@ export const POST = createApiHandler<AnchorsResponse>(
         resolution,
       })
 
-      // Generate image
+      // Generate image (userId 전달하면 자동으로 Library에 저장됨)
       const result = await generateImage({
         prompt: fullPrompt,
         aspectRatio,
         resolution,
+        userId: user.id,
+        sessionId,
+        metadata: {
+          anchorId: anchorPrompt.id,
+          category: anchorPrompt.category,
+          name: anchorPrompt.name,
+          style,
+        },
       })
 
       logger.debug('Anchor generation result', {
@@ -76,6 +84,7 @@ export const POST = createApiHandler<AnchorsResponse>(
         name: anchorPrompt.name,
         description: anchorPrompt.prompt,
         originalUrl: result.success ? result.url : undefined,
+        dbId: result.dbId, // Library에 저장된 레코드 ID
         expandedUrls: [], // Will be filled by expand step
       })
     }

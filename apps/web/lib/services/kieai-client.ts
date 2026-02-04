@@ -48,7 +48,24 @@ export interface KieaiRecordInfoResponse {
 
 export interface KieaiMusicResult {
   taskId: string
-  state: string
+  state?: string
+  parentMusicId?: string
+  param?: string
+  response?: {
+    taskId: string
+    sunoData?: Array<{
+      id: string
+      audioUrl: string
+      sourceAudioUrl?: string
+      streamAudioUrl?: string
+      imageUrl?: string
+      duration: number
+      title?: string
+      tags?: string
+      modelName?: string
+    }>
+  }
+  // Legacy format (kept for compatibility)
   data?: Array<{
     id: string
     audio_url: string
@@ -203,6 +220,8 @@ export async function createMusicTask(
     instrumental: params.instrumental ?? true,
     model: params.model || 'V4_5',
     customMode: params.customMode ?? true,
+    // Suno API requires callBackUrl - use dummy URL if not provided (we'll poll for results)
+    callBackUrl: callbackUrl || 'https://example.com/webhook/suno',
   }
 
   if (params.style) {
@@ -211,10 +230,6 @@ export async function createMusicTask(
 
   if (params.title) {
     body.title = params.title
-  }
-
-  if (callbackUrl) {
-    body.callBackUrl = callbackUrl
   }
 
   const response = await request<KieaiTaskResponse>('/api/v1/generate', {
@@ -246,8 +261,25 @@ export async function waitForMusic(
 
   while (Date.now() - startTime < maxWaitMs) {
     const result = await getMusicResult(taskId)
-    onProgress?.(result.state)
 
+    // Check for new format (response.sunoData)
+    // Find any track with a valid URL (audioUrl or streamAudioUrl)
+    const sunoData = result.response?.sunoData
+    const validTrack = sunoData?.find(
+      (track) => track.audioUrl || track.streamAudioUrl
+    )
+    if (validTrack) {
+      onProgress?.('complete')
+      return result
+    }
+
+    // Check for legacy format (data array)
+    if (result.data && result.data.length > 0 && result.data[0]?.audio_url) {
+      onProgress?.('complete')
+      return result
+    }
+
+    // Check state field if present
     if (result.state === 'complete' || result.state === 'success') {
       return result
     }
@@ -256,6 +288,7 @@ export async function waitForMusic(
       throw new KieaiError('Music generation failed', 500)
     }
 
+    onProgress?.('processing')
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
   }
 

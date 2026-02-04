@@ -16,7 +16,7 @@ import {
  * - 최대 7개 동시 처리 (KIDS_BATCH_LIMITS.image)
  */
 export const POST = createApiHandler<ShotsResponse>(
-  async (request, { user, requestId }) => {
+  async (request, { user }) => {
     const body = await request.json()
     const validated = ShotsRequestSchema.parse(body)
 
@@ -33,23 +33,28 @@ export const POST = createApiHandler<ShotsResponse>(
       prompt: `${shot.visualPrompt}. ${styleConfig.visualPromptSuffix}`,
     }))
 
-    // 이미지 서비스를 통한 배치 생성 (formFactor에 따른 aspectRatio, resolution 적용)
+    // 이미지 서비스를 통한 배치 생성 (userId 전달하면 자동으로 Library에 저장됨)
     const batchResult = await batchEditImages({
       tasks,
       aspectRatio: formFactorPreset.shot.aspectRatio,
       resolution: formFactorPreset.shot.resolution,
+      userId: user.id,
+      sessionId,
+      metadata: { style, formFactor },
     })
 
     // 결과 매핑
     const shots = script.shots.map((shot, idx) => {
       const result = batchResult.results[idx]
+      const imageUrl = result?.url || `https://picsum.photos/seed/${Date.now() + idx}/800/450`
+
       return {
         id: shot.id,
         shotNumber: shot.shotNumber,
         duration: shot.duration as 5 | 10,
         narration: shot.narration,
         visualPrompt: shot.visualPrompt,
-        imageUrl: result?.url || `https://picsum.photos/seed/${Date.now() + idx}/800/450`,
+        imageUrl,
       }
     })
 

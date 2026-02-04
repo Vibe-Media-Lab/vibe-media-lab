@@ -13,6 +13,8 @@ import {
   X,
   ImagePlus,
   FolderOpen,
+  Heart,
+  Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -42,6 +44,8 @@ interface GeneratedImage {
   url: string
   category?: string
   label?: string
+  dbId?: string // Library에 저장된 레코드 ID (좋아요 API용)
+  isFavorite?: boolean
 }
 
 interface MediaChoiceResult {
@@ -365,9 +369,97 @@ function UploadArea({ config, files, onFilesChange }: UploadAreaProps) {
 interface GeneratedPreviewProps {
   images: GeneratedImage[]
   onRegenerateItem?: (id: string) => void
+  onLikeItem?: (id: string) => void
+  onDownloadItem?: (id: string, url: string) => void
 }
 
-function GeneratedPreview({ images, onRegenerateItem }: GeneratedPreviewProps) {
+function GeneratedPreview({ images, onRegenerateItem, onLikeItem, onDownloadItem }: GeneratedPreviewProps) {
+  const [likedItems, setLikedItems] = React.useState<Set<string>>(() => {
+    // 초기값: 이미 좋아요된 이미지들
+    const initialLiked = new Set<string>()
+    images.forEach((img) => {
+      if (img.isFavorite) {
+        initialLiked.add(img.id)
+      }
+    })
+    return initialLiked
+  })
+  const [loadingItems, setLoadingItems] = React.useState<Set<string>>(new Set())
+
+  const handleLike = async (id: string) => {
+    const image = images.find((img) => img.id === id)
+
+    // dbId가 없으면 로컬 상태만 토글
+    if (!image?.dbId) {
+      setLikedItems((prev) => {
+        const newSet = new Set(prev)
+        if (newSet.has(id)) {
+          newSet.delete(id)
+        } else {
+          newSet.add(id)
+        }
+        return newSet
+      })
+      onLikeItem?.(id)
+      return
+    }
+
+    // API 호출로 좋아요 토글
+    setLoadingItems((prev) => new Set(prev).add(id))
+
+    try {
+      const response = await fetch(`/api/library/${image.dbId}`, {
+        method: 'PATCH',
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        const newFavorite = result.data?.is_favorite
+
+        setLikedItems((prev) => {
+          const newSet = new Set(prev)
+          if (newFavorite) {
+            newSet.add(id)
+          } else {
+            newSet.delete(id)
+          }
+          return newSet
+        })
+        onLikeItem?.(id)
+      }
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err)
+    } finally {
+      setLoadingItems((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(id)
+        return newSet
+      })
+    }
+  }
+
+  const handleDownload = async (id: string, url: string) => {
+    if (onDownloadItem) {
+      onDownloadItem(id, url)
+      return
+    }
+    // Default download behavior
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = `${id}.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(blobUrl)
+    } catch (err) {
+      console.error('Download failed:', err)
+    }
+  }
+
   return (
     <div className="space-y-3">
       <span className="text-sm font-medium text-white/60">
@@ -403,17 +495,56 @@ function GeneratedPreview({ images, onRegenerateItem }: GeneratedPreviewProps) {
               </div>
             )}
 
-            {onRegenerateItem && (
-              <button
-                onClick={() => onRegenerateItem(image.id)}
-                className={cn(
-                  'absolute right-2 top-2 rounded-full bg-black/60 p-1.5',
-                  'opacity-0 transition-opacity group-hover:opacity-100'
-                )}
-              >
-                <RotateCcw className="h-3 w-3 text-white" />
-              </button>
-            )}
+            {/* Hover action buttons */}
+            <div className={cn(
+              'absolute right-2 top-2 flex gap-1',
+              'opacity-0 transition-opacity group-hover:opacity-100'
+            )}>
+              {image.url && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleLike(image.id)
+                    }}
+                    disabled={loadingItems.has(image.id)}
+                    className={cn(
+                      'rounded-full bg-black/60 p-1.5 hover:bg-black/80',
+                      loadingItems.has(image.id) && 'opacity-50 cursor-not-allowed'
+                    )}
+                    title="좋아요"
+                  >
+                    {loadingItems.has(image.id) ? (
+                      <Loader2 className="h-3 w-3 animate-spin text-white" />
+                    ) : (
+                      <Heart className={cn('h-3 w-3', likedItems.has(image.id) ? 'fill-red-500 text-red-500' : 'text-white')} />
+                    )}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDownload(image.id, image.url!)
+                    }}
+                    className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
+                    title="다운로드"
+                  >
+                    <Download className="h-3 w-3 text-white" />
+                  </button>
+                </>
+              )}
+              {onRegenerateItem && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onRegenerateItem(image.id)
+                  }}
+                  className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
+                  title="재생성"
+                >
+                  <RotateCcw className="h-3 w-3 text-white" />
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -566,11 +697,13 @@ export function MediaChoiceStep({
 
       // Map API response to generated images
       const generated: GeneratedImage[] = (anchorsData.anchors || []).map(
-        (anchor: { id: string; category: string; name: string; originalUrl?: string }, idx: number) => ({
+        (anchor: { id: string; category: string; name: string; originalUrl?: string; dbId?: string }, idx: number) => ({
           id: anchor.id,
           url: anchor.originalUrl || `https://picsum.photos/seed/${anchor.id}-${idx}/512/512`,
           category: anchor.category,
           label: anchor.name,
+          dbId: anchor.dbId,
+          isFavorite: false,
         })
       )
 
@@ -603,8 +736,102 @@ export function MediaChoiceStep({
   }
 
   // Handle individual item regeneration
-  const handleRegenerateItem = async (_itemId: string) => {
-    // TODO: Implement individual item regeneration
+  const handleRegenerateItem = async (itemId: string) => {
+    // Find the anchor prompt for this item
+    const setupData = (inputContext?.setup as Record<string, unknown>) || {}
+    const scriptStepData = inputContext?.script as { data?: unknown } | undefined
+    const scriptResponse = unwrapApiResponse<{
+      sessionId?: string
+      anchorPrompts?: Array<{
+        id: string
+        category: 'character' | 'background'
+        name: string
+        prompt: string
+      }>
+    }>(scriptStepData?.data)
+
+    const anchorPrompts = scriptResponse?.anchorPrompts || []
+    const targetPrompt = anchorPrompts.find((ap) => ap.id === itemId)
+
+    if (!targetPrompt) {
+      console.error('Anchor prompt not found for item:', itemId)
+      return
+    }
+
+    const sessionId = scriptResponse?.sessionId || `session-${Date.now()}`
+    const formFactor = (setupData.formFactor as string) || 'longform'
+    const style = (setupData.style as string) || 'pixar'
+
+    // Update UI to show loading for this item
+    setGeneratedImages((prev) =>
+      prev.map((img) =>
+        img.id === itemId ? { ...img, url: '' } : img
+      )
+    )
+
+    try {
+      const response = await fetch('/api/kids-animation/anchors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          anchorPrompts: [targetPrompt],
+          formFactor,
+          style,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `API 오류: ${response.status}`)
+      }
+
+      const result = await response.json()
+      const anchorsData = result.data || result
+      const regeneratedAnchor = anchorsData.anchors?.[0]
+
+      if (regeneratedAnchor) {
+        // Update the specific image
+        setGeneratedImages((prev) =>
+          prev.map((img) =>
+            img.id === itemId
+              ? {
+                  ...img,
+                  url: regeneratedAnchor.originalUrl || img.url,
+                  dbId: regeneratedAnchor.dbId || img.dbId,
+                  isFavorite: false, // 새로 생성된 이미지는 좋아요 초기화
+                }
+              : img
+          )
+        )
+
+        // Update the value for parent component
+        onChange({
+          mode: 'generate',
+          generated: generatedImages.map((img) =>
+            img.id === itemId
+              ? {
+                  ...img,
+                  url: regeneratedAnchor.originalUrl || img.url,
+                  dbId: regeneratedAnchor.dbId || img.dbId,
+                  isFavorite: false,
+                }
+              : img
+          ),
+        })
+      }
+    } catch (err) {
+      console.error('Regenerate failed:', err)
+      // Restore original image on error
+      const originalImage = value?.generated?.find((g) => g.id === itemId)
+      if (originalImage) {
+        setGeneratedImages((prev) =>
+          prev.map((img) =>
+            img.id === itemId ? { ...img, url: originalImage.url } : img
+          )
+        )
+      }
+    }
   }
 
   // Handle approve
@@ -726,7 +953,10 @@ export function MediaChoiceStep({
             {/* Show generated images in real-time */}
             {generatedImages.length > 0 && (
               <div className="w-full pt-4">
-                <GeneratedPreview images={generatedImages} />
+                <GeneratedPreview
+                  images={generatedImages}
+                  onRegenerateItem={handleRegenerateItem}
+                />
               </div>
             )}
           </div>

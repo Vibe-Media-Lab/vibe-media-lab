@@ -56,7 +56,6 @@ export const POST = createApiHandler<ScriptResponse>(
     const generatedScript = await generateScript({
       story,
       style,
-      quality: 'standard', // 스크립트 품질은 고정
       maxShots: formFactorConfig.maxShots,
     })
 
@@ -97,46 +96,45 @@ export const POST = createApiHandler<ScriptResponse>(
     // 캐릭터 앵커 프롬프트 (Enhanced 스토리인 경우)
     if ('characters' in story && Array.isArray(story.characters)) {
       story.characters.forEach((char, idx) => {
-        // 캐릭터 시트용 프롬프트: 흰 배경, 전신, 정면, 텍스트 없음
+        // 캐릭터 단일 이미지 프롬프트: 흰 배경, 전신, 정면(0도), 텍스트 없음
         const baseDescription = char.visualDescription || `A cute ${char.species} character named ${char.name}`
         anchorPrompts.push({
           id: `char-${idx + 1}`,
           category: 'character',
           name: char.name,
-          prompt: `Character design sheet. ${baseDescription}. Full body, front view, centered, standing pose, clean white background, no shadows, high detail, no text, no labels, no watermarks, no letters, no words, ${styleConfig.visualPromptSuffix}`,
+          prompt: `Single character illustration. ${baseDescription}. CAMERA ANGLE: Perfectly frontal 0-degree angle, character facing straight into camera, both eyes equally visible, symmetrical face, nose pointing directly at viewer. Full body visible, centered composition, standing pose with arms naturally at sides, plain white background, no shadows, high detail, one character only, no multiple views, no multiple angles, no text, no labels, no watermarks, ${styleConfig.visualPromptSuffix}`,
         })
       })
     }
 
     // 배경 앵커 프롬프트 (setting에서 추출)
-    // locationVisualDescriptions가 있으면 사용, 없으면 기본 변형 사용
+    // locationVisualDescriptions가 있으면 사용, 없으면 location 이름 기반으로 생성
     if ('setting' in story && story.setting) {
       const locations = story.setting.mainLocations || []
       const visualDescriptions = story.setting.locationVisualDescriptions || []
+      const worldContext = story.setting.world || 'magical fantasy world'
 
       logger.debug('Background info', {
         locationCount: locations.length,
         descriptionCount: visualDescriptions.length,
+        world: worldContext,
       })
 
-      // 기본 변형 (locationVisualDescriptions가 없을 때 fallback)
-      const fallbackVariations = [
-        'grand entrance area with ornate decorations, welcoming atmosphere',
-        'mysterious pathway with magical elements, enchanted vegetation',
-        'serene central location with beautiful scenery, ambient lighting',
-        'hidden corner with unique features, atmospheric mood',
-        'expansive vista with dramatic landscape, epic scale',
-      ]
-
       locations.forEach((location, idx) => {
-        // LLM이 생성한 영어 설명이 있으면 사용, 없으면 fallback
-        const visualDesc = visualDescriptions[idx] || fallbackVariations[idx % fallbackVariations.length]
+        // LLM이 생성한 영어 설명이 있으면 사용
+        const hasVisualDesc = visualDescriptions[idx] && visualDescriptions[idx].trim().length > 0
+
+        // location 이름을 영어로 변환하거나 그대로 사용 (프롬프트에 포함)
+        // 프롬프트에 location 이름을 명시적으로 포함하여 관련성 보장
+        const locationPrompt = hasVisualDesc
+          ? `${visualDescriptions[idx]}`
+          : `A beautiful ${location} in a ${worldContext}, detailed environment with atmospheric lighting, fantasy animation style`
 
         anchorPrompts.push({
           id: `bg-${idx + 1}`,
           category: 'background',
           name: location,
-          prompt: `Environment concept art for animation. ${visualDesc}. Wide establishing shot, cinematic lighting, vibrant colors, detailed environment painting, no characters or creatures in the scene, empty scene, ${styleConfig.visualPromptSuffix}`,
+          prompt: `Environment concept art for animation. Scene: "${location}". ${locationPrompt}. COMPOSITION: Extreme wide establishing shot, 120-degree panoramic field of view, entire environment visible from edge to edge, maximum distance showing full scope of location, tiny details visible in far background. Cinematic lighting, vibrant colors, detailed environment painting, absolutely no characters, no people, no creatures, no animals in the scene, empty background only, ${styleConfig.visualPromptSuffix}`,
         })
       })
     }

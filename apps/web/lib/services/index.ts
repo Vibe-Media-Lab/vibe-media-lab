@@ -55,10 +55,14 @@ export {
   saveImage,
   saveImages,
   deleteImage,
-  cleanupOldImages,
   getStorageStats,
+  getStorageProvider,
 } from './image-storage'
 export type { SaveImageResult, SaveImageParams } from './image-storage'
+
+// Library Saver (자동 저장)
+export { saveToLibrary } from './library-saver'
+export type { SaveToLibraryParams, MediaType } from './library-saver'
 
 // Kie.ai Client (Fallback)
 export { isKieaiAvailable, KieaiError } from './kieai-client'
@@ -110,6 +114,28 @@ export type {
   GeneratedScript,
 } from './llm-service'
 
+// Creatomate Client
+export {
+  isCreatomateAvailable,
+  getCreatomateProvider,
+  CreatomateError,
+} from './creatomate-client'
+export type {
+  CreatomateElement,
+  CreatomateTemplate,
+  CreatomateRenderResponse,
+} from './creatomate-client'
+
+// Final Service (Video Composition)
+export * as finalService from './final-service'
+export {
+  composeVideo,
+  generateThumbnail,
+  isFinalServiceAvailable,
+  getFinalServiceProvider,
+  estimateCompositionTime,
+} from './final-service'
+
 // ============================================================
 // Service Status
 // ============================================================
@@ -119,6 +145,7 @@ import { getImageServiceProvider } from './image-service'
 import { getVideoServiceProvider } from './video-service'
 import { getAudioServiceProvider } from './audio-service'
 import { getLLMServiceProvider } from './llm-service'
+import { getFinalServiceProvider } from './final-service'
 
 export function getServiceStatus(): ServiceStatus {
   return {
@@ -137,6 +164,10 @@ export function getServiceStatus(): ServiceStatus {
     llm: {
       available: getLLMServiceProvider() !== 'mock',
       provider: getLLMServiceProvider(),
+    },
+    composition: {
+      available: getFinalServiceProvider() !== 'mock',
+      provider: getFinalServiceProvider(),
     },
   }
 }

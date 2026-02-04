@@ -67,6 +67,13 @@ export interface Database {
           error: string | null
           created_at: string
           completed_at: string | null
+          file_size_bytes: number | null
+          width: number | null
+          height: number | null
+          duration_seconds: number | null
+          thumbnail_url: string | null
+          is_favorite: boolean
+          project_id: string | null
         }
         Insert: {
           id?: string
@@ -84,6 +91,13 @@ export interface Database {
           error?: string | null
           created_at?: string
           completed_at?: string | null
+          file_size_bytes?: number | null
+          width?: number | null
+          height?: number | null
+          duration_seconds?: number | null
+          thumbnail_url?: string | null
+          is_favorite?: boolean
+          project_id?: string | null
         }
         Update: {
           id?: string
@@ -101,6 +115,13 @@ export interface Database {
           error?: string | null
           created_at?: string
           completed_at?: string | null
+          file_size_bytes?: number | null
+          width?: number | null
+          height?: number | null
+          duration_seconds?: number | null
+          thumbnail_url?: string | null
+          is_favorite?: boolean
+          project_id?: string | null
         }
       }
       user_credits: {
@@ -124,6 +145,53 @@ export interface Database {
           balance?: number
           created_at?: string
           updated_at?: string
+        }
+      }
+      projects: {
+        Row: {
+          id: string
+          user_id: string
+          template_id: string
+          title: string
+          current_step_index: number
+          status: 'in_progress' | 'completed' | 'cancelled'
+          step_data: Record<string, unknown>
+          session_id: string | null
+          thumbnail_url: string | null
+          output_url: string | null
+          created_at: string
+          updated_at: string
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          template_id: string
+          title: string
+          current_step_index?: number
+          status?: 'in_progress' | 'completed' | 'cancelled'
+          step_data?: Record<string, unknown>
+          session_id?: string | null
+          thumbnail_url?: string | null
+          output_url?: string | null
+          created_at?: string
+          updated_at?: string
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          template_id?: string
+          title?: string
+          current_step_index?: number
+          status?: 'in_progress' | 'completed' | 'cancelled'
+          step_data?: Record<string, unknown>
+          session_id?: string | null
+          thumbnail_url?: string | null
+          output_url?: string | null
+          created_at?: string
+          updated_at?: string
+          completed_at?: string | null
         }
       }
     }

@@ -193,13 +193,6 @@ export const KIDS_ANIMATION_STYLES = {
     visualPromptSuffix:
       'DreamWorks animation style, dynamic angles, exaggerated expressions, action-oriented',
   },
-  ghibli: {
-    label: 'Ghibli',
-    description: '서정/예술',
-    characteristics: '풍경 중심, 여백, 담백한 톤',
-    visualPromptSuffix:
-      'Studio Ghibli style, hand-drawn aesthetic, serene landscapes, soft watercolor tones',
-  },
 } as const
 
 export const KIDS_THUMBNAIL_STYLES = {
@@ -218,10 +211,6 @@ export const KIDS_THUMBNAIL_STYLES = {
   dreamworks: {
     label: 'DreamWorks',
     description: '과장된 포즈, 다이내믹 앵글',
-  },
-  ghibli: {
-    label: 'Ghibli',
-    description: '풍경 중심, 여백, 담백한 톤',
   },
 } as const
 

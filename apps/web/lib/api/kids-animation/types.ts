@@ -16,7 +16,7 @@ export const StoryRequestSchema = z.object({
   sessionId: z.string(),
   topic: z.string().min(1).max(500),
   formFactor: z.enum(['longform', 'shortform']).default('longform'),
-  style: z.enum(['pixar', 'disney', 'dreamworks', 'ghibli']).default('pixar'),
+  style: z.enum(['pixar', 'disney', 'dreamworks']).default('pixar'),
 })
 export type StoryRequest = z.infer<typeof StoryRequestSchema>
 
@@ -83,7 +83,7 @@ export const ScriptRequestSchema = z.object({
   sessionId: z.string(),
   story: FlexibleStorySchema,
   formFactor: z.enum(['longform', 'shortform']).default('longform'),
-  style: z.enum(['pixar', 'disney', 'dreamworks', 'ghibli']).default('pixar'),
+  style: z.enum(['pixar', 'disney', 'dreamworks']).default('pixar'),
 })
 export type ScriptRequest = z.infer<typeof ScriptRequestSchema>
 
@@ -96,7 +96,7 @@ export const AnchorsRequestSchema = z.object({
     prompt: z.string(),
   })),
   formFactor: z.enum(['longform', 'shortform']).default('longform'),
-  style: z.enum(['pixar', 'disney', 'dreamworks', 'ghibli']).default('pixar'),
+  style: z.enum(['pixar', 'disney', 'dreamworks']).default('pixar'),
 })
 export type AnchorsRequest = z.infer<typeof AnchorsRequestSchema>
 
@@ -116,7 +116,7 @@ export const ShotsRequestSchema = z.object({
     category: z.enum(['character', 'background']),
     url: z.string(),
   })),
-  style: z.enum(['pixar', 'disney', 'dreamworks', 'ghibli']).default('pixar'),
+  style: z.enum(['pixar', 'disney', 'dreamworks']).default('pixar'),
   formFactor: z.enum(['longform', 'shortform']).default('longform'),
 })
 export type ShotsRequest = z.infer<typeof ShotsRequestSchema>
@@ -149,13 +149,13 @@ export const FinalRequestSchema = z.object({
   sessionId: z.string(),
   shots: z.array(z.object({
     id: z.string(),
-    shotNumber: z.number(),
-    duration: z.number(),
-    videoUrl: z.string(),
-    audioUrl: z.string(),
-  })),
-  bgmUrl: z.string(),
-  style: z.enum(['pixar', 'disney', 'dreamworks', 'ghibli']).default('pixar'),
+    shotNumber: z.number().int().positive(),
+    duration: z.number().positive().max(300), // Max 5 min per shot
+    videoUrl: z.string().min(1), // URL or path
+    audioUrl: z.string().min(1), // URL or path
+  })).min(1).max(100), // At least 1, max 100 shots
+  bgmUrl: z.string().min(1), // URL or path
+  style: z.enum(['pixar', 'disney', 'dreamworks']).default('pixar'),
   songVersion: z.boolean().optional(),
 })
 export type FinalRequest = z.infer<typeof FinalRequestSchema>
@@ -210,10 +210,13 @@ export interface AudioResponse {
     audioUrl: string
     duration: number
   }>
-  bgm: {
+  bgmTracks: Array<{
+    id: string
     url: string
     duration: number
-  }
+    title?: string
+    imageUrl?: string
+  }>
 }
 
 export interface FinalResponse {

@@ -135,6 +135,8 @@ export interface AudioItem {
   url: string
   label: string
   duration?: number
+  isBgm?: boolean
+  bgmIndex?: number
 }
 
 // Preview props
@@ -144,4 +146,8 @@ export interface PreviewProps {
   editable?: boolean
   onEdit?: (data: unknown) => void
   onRegenerateItem?: (itemId: string) => void
+  onLikeItem?: (itemId: string) => void
+  onDownloadItem?: (itemId: string, url: string) => void
+  selectedBgmIndex?: number
+  onSelectBgm?: (index: number) => void
 }

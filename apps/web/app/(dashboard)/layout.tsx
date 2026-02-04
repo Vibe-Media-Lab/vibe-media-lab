@@ -32,12 +32,6 @@ export default async function DashboardLayout({
             </Link>
             <nav className="flex items-center gap-4 text-sm">
               <Link
-                href="/studio"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Studio
-              </Link>
-              <Link
                 href="/gallery"
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
@@ -58,6 +52,12 @@ export default async function DashboardLayout({
             </nav>
           </div>
           <div className="flex items-center gap-4">
+            <Link
+              href="/library"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Library
+            </Link>
             <span className="text-sm text-muted-foreground">
               {user.email}
             </span>

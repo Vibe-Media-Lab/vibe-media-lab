@@ -1,19 +1,26 @@
 import { createApiHandler } from '@/lib/api'
-import { KIDS_ANIMATION_STYLES, KIDS_THUMBNAIL_STYLES } from '@vibe-media-lab/shared'
 import {
   FinalRequestSchema,
   type FinalResponse,
 } from '@/lib/api/kids-animation/types'
+import {
+  composeVideo,
+  generateThumbnail,
+  getFinalServiceProvider,
+} from '@/lib/services/final-service'
+import { getLogger } from '@/lib/logger'
+
+const logger = getLogger('api/kids-animation/final')
 
 /**
  * POST /api/kids-animation/final
  *
- * 최종 편집 (영상 합성 + 썸네일 + 노래 버전)
+ * 최종 편집 (영상 합성 + 썸네일)
  *
- * TODO: 실제 구현 시
- * - ffmpeg로 비디오 + TTS + BGM 합성
- * - nanobanana_generate로 썸네일 생성
- * - (선택) 노래 버전 생성
+ * Flow:
+ * 1. Creatomate로 비디오 클립 + TTS + BGM 합성
+ * 2. nanobanana로 썸네일 생성
+ * 3. (선택) 노래 버전 생성 - 추후 구현
  */
 export const POST = createApiHandler<FinalResponse>(
   async (request, { user, requestId }) => {
@@ -21,28 +28,112 @@ export const POST = createApiHandler<FinalResponse>(
     const validated = FinalRequestSchema.parse(body)
 
     const { sessionId, shots, bgmUrl, style, songVersion } = validated
-    const styleConfig = KIDS_ANIMATION_STYLES[style]
 
-    // 총 재생 시간 계산
-    const totalDuration = shots.reduce((sum, shot) => sum + shot.duration, 0)
+    logger.info('Final composition started', {
+      requestId,
+      sessionId,
+      shotCount: shots.length,
+      style,
+      provider: getFinalServiceProvider(),
+    })
 
-    // Mock 최종 결과
-    // 실제 구현 시:
-    // 1. ffmpeg로 모든 비디오 + TTS 합성
-    // 2. BGM 오버레이
-    // 3. 썸네일 생성 (nanobanana)
-    // 4. (선택) 노래 버전 생성
+    // Debug: 실제 전달된 데이터 로깅
+    logger.debug('Final request data', {
+      bgmUrl: bgmUrl ? bgmUrl.slice(0, 50) + '...' : 'EMPTY',
+      shots: shots.map((s) => ({
+        id: s.id,
+        shotNumber: s.shotNumber,
+        duration: s.duration,
+        hasVideoUrl: !!s.videoUrl,
+        hasAudioUrl: !!s.audioUrl,
+        audioUrl: s.audioUrl ? s.audioUrl.slice(0, 50) + '...' : 'EMPTY',
+      })),
+    })
 
+    // 1. Video Composition
+    const composeResult = await composeVideo({
+      sessionId,
+      shots: shots.map((shot) => ({
+        id: shot.id,
+        shotNumber: shot.shotNumber,
+        duration: shot.duration,
+        videoUrl: shot.videoUrl,
+        audioUrl: shot.audioUrl,
+      })),
+      bgmUrl,
+      bgmVolume: 0.3, // 30% volume for BGM
+      userId: user?.id,
+      metadata: {
+        style,
+        requestId,
+      },
+    })
+
+    if (!composeResult.success) {
+      logger.error('Video composition failed', {
+        requestId,
+        sessionId,
+        error: composeResult.error,
+      })
+      throw new Error(composeResult.error || 'Video composition failed')
+    }
+
+    logger.info('Video composition completed', {
+      requestId,
+      sessionId,
+      videoUrl: composeResult.videoUrl,
+      duration: composeResult.duration,
+    })
+
+    // 2. Thumbnail Generation
+    // Extract story title from metadata if available, or generate a default
+    const thumbnailTitle = `Kids Animation - ${style.charAt(0).toUpperCase() + style.slice(1)} Style`
+
+    const thumbnailResult = await generateThumbnail({
+      title: thumbnailTitle,
+      style,
+      userId: user?.id,
+      sessionId,
+    })
+
+    // Thumbnail is non-critical - use fallback if generation fails
+    const thumbnailUrl = thumbnailResult.success && thumbnailResult.url
+      ? thumbnailResult.url
+      : `https://picsum.photos/seed/${sessionId}/1280/720`
+
+    if (!thumbnailResult.success) {
+      logger.warn('Thumbnail generation failed, using fallback', {
+        requestId,
+        sessionId,
+        error: thumbnailResult.error,
+      })
+    }
+
+    // 3. Build response
     const result: FinalResponse = {
       sessionId,
-      videoUrl: '', // 실제 구현 시 최종 비디오 URL
-      thumbnailUrl: `https://picsum.photos/seed/${Date.now()}/1280/720`, // 실제 구현 시 생성된 썸네일
-      totalDuration,
+      videoUrl: composeResult.videoUrl || '',
+      thumbnailUrl,
+      totalDuration: composeResult.duration || 0,
     }
 
+    // 4. Song version (TODO: implement later)
     if (songVersion) {
-      result.songVideoUrl = '' // 실제 구현 시 노래 버전 URL
+      // Future: Generate song version with different audio track
+      logger.info('Song version requested but not yet implemented', {
+        requestId,
+        sessionId,
+      })
+      // result.songVideoUrl = await generateSongVersion(...)
     }
+
+    logger.info('Final composition completed', {
+      requestId,
+      sessionId,
+      videoUrl: result.videoUrl,
+      thumbnailUrl: result.thumbnailUrl,
+      duration: result.totalDuration,
+    })
 
     return result
   }

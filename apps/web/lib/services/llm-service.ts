@@ -40,13 +40,11 @@ const GEMINI_API_URL =
 export interface StoryGenerationParams {
   topic: string
   style: KidsAnimationStyle
-  quality: 'draft' | 'standard' | 'premium'
 }
 
 export interface ScriptGenerationParams {
   story: KidsStory | KidsBasicStory
   style: KidsAnimationStyle
-  quality: 'draft' | 'standard' | 'premium'
   maxShots: number
 }
 
@@ -228,7 +226,6 @@ ${ZOOTOPIA_PROTOCOL_PROMPT}
 
 주제: ${params.topic}
 스타일: ${params.style} (${styleConfig.description})
-품질: ${params.quality}
 
 위의 6-Act Zootopia Protocol에 따라 3-7세 아이들을 위한 교육적 애니메이션 스토리를 작성해주세요.
 
@@ -474,7 +471,6 @@ ${charactersInfo}
 ${plotInfo}
 
 ## 스타일: ${params.style} - ${styleConfig.description}
-## 품질: ${params.quality}
 
 ## 출력 형식 (JSON)
 
@@ -486,8 +482,8 @@ ${plotInfo}
     {
       "id": "shot-1",
       "shotNumber": 1,
-      "duration": 5,
-      "narration": "나레이션 텍스트 (한국어, 아이 친화적)",
+      "duration": 10,
+      "narration": "나레이션 텍스트 (한국어, 25자 이내)",
       "visualPrompt": "영어 비주얼 프롬프트 (캐릭터 외형 일관성 유지)",
       "actKey": "hook",
       "actTitle": "Act 제목 (한글)",
@@ -503,7 +499,7 @@ ${plotInfo}
 \`\`\`
 
 ## 규칙:
-1. **duration**: ${params.quality === 'premium' ? '10초 고정' : params.quality === 'draft' ? '5초 고정' : '일반적으로 5초, 중요한 장면(twist, action)은 10초'}
+1. **duration**: 모든 샷 10초 고정
 
 2. **visualPrompt** (영어):
    - ${styleConfig.visualPromptSuffix} 스타일 반영
@@ -525,9 +521,13 @@ ${plotInfo}
 
 6. **cameraMovement**: static, pan, zoom-in, zoom-out, tracking
 
-7. **narration**: 한국어, 3-7세가 이해할 수 있게
+7. **narration**: 한국어, 3-7세가 이해할 수 있게, **반드시 40-50자** (동화책 읽어주듯 천천히 10초 분량)
 
-8. **bgmPrompt**: 영어, 아동용 애니메이션에 적합하게, ${styleConfig.description} 분위기
+8. **bgmPrompt**: 영어, 아동용 애니메이션 BGM 프롬프트
+   - 필수 포함: 장르/분위기, 스토리 감정 흐름 (hopeful→surprised→adventurous→sad→brave→joyful)
+   - 조건: instrumental only, 3-7세 적합, ${styleConfig.description} 스타일
+   - 스토리의 핵심 테마와 감정 변화를 음악으로 표현
+   - 예: "Cheerful orchestral music with gentle piano intro, building to adventurous strings, soft emotional moment, triumphant brass finale"
 `
 
   const response = await callGemini(prompt)
@@ -539,7 +539,7 @@ async function mockGenerateScript(
 ): Promise<GeneratedScript> {
   await new Promise((resolve) => setTimeout(resolve, 2500))
 
-  const { story, style, quality, maxShots } = params
+  const { story, style, maxShots } = params
   const styleConfig = KIDS_ANIMATION_STYLES[style]
 
   // 6-Act Zootopia Protocol 기반 샷 매핑
@@ -629,19 +629,10 @@ async function mockGenerateScript(
       visualPrompt = `${styleConfig.visualPromptSuffix}. Scene ${i + 1}: ${actInfo.label}. Characters in a magical world.`
     }
 
-    let duration: 5 | 10
-    if (quality === 'draft') {
-      duration = 5
-    } else if (quality === 'premium') {
-      duration = 10
-    } else {
-      duration = actKey === 'twist' || actKey === 'action' ? 10 : 5
-    }
-
     return {
       id: `shot-${i + 1}`,
       shotNumber: i + 1,
-      duration,
+      duration: 10 as const,
       narration,
       visualPrompt,
       actKey,

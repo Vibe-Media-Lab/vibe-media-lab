@@ -26,7 +26,6 @@ export const POST = createApiHandler<StoryResponse>(
     const story = await generateStory({
       topic,
       style,
-      quality: 'standard', // 스토리 생성은 quality 고정
     })
 
     return {

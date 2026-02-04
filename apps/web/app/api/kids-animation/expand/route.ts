@@ -33,20 +33,20 @@ interface ExpandResponse {
  * 캐릭터 변형 프롬프트 (Gemini 3 Pro Image 최적화)
  *
  * 참조 이미지 기반 일관성 유지 프롬프트
+ * NOTE: front는 앵커 생성 단계에서 이미 생성되므로 확장에서 제외
  */
 const CHARACTER_VARIATIONS = {
-  front: 'Generate the exact same character from the reference image. Disney Pixar 3D animation style. Front view, facing directly at camera. Full body visible. Neutral relaxed expression. Simple solid gray background. Maintain identical clothing, colors, proportions, and design details.',
-  three_quarter: 'Generate the exact same character from the reference image. Disney Pixar 3D animation style. Three-quarter view, slight angle showing depth. Full body visible. Neutral expression. Simple solid gray background. Maintain identical clothing, colors, proportions, and design details.',
-  happy: 'Generate the exact same character from the reference image. Disney Pixar 3D animation style. Front view. Happy joyful expression with big genuine smile, eyes slightly squinted with joy. Full body visible. Simple solid gray background. Maintain identical clothing, colors, proportions, and design details.',
-  sad: 'Generate the exact same character from the reference image. Disney Pixar 3D animation style. Front view. Sad melancholic expression, downcast eyes, slightly drooping posture. Full body visible. Simple solid gray background. Maintain identical clothing, colors, proportions, and design details.',
+  three_quarter: 'Generate the exact same character from the reference image. Disney Pixar 3D animation style. CAMERA ANGLE: 45-degree rotation to the right, showing side profile of face and body, one ear partially visible, nose clearly in profile view, body turned to match face angle. Full body visible. Neutral expression. Simple solid gray background. Maintain identical clothing, colors, proportions, and design details.',
+  happy: 'Generate the exact same character from the reference image. Disney Pixar 3D animation style. CAMERA ANGLE: Frontal 0-degree view. EXPRESSION: Happy and joyful, natural warm smile. Full body visible. Simple solid gray background. Maintain identical clothing, colors, proportions, and design details.',
+  sad: 'Generate the exact same character from the reference image. Disney Pixar 3D animation style. CAMERA ANGLE: Frontal 0-degree view. EXPRESSION: Sad and downcast, melancholic mood. Full body visible. Simple solid gray background. Maintain identical clothing, colors, proportions, and design details.',
 } as const
 
 /**
  * 배경 변형 프롬프트 (Gemini 3 Pro Image 최적화)
+ * NOTE: wide는 앵커 생성 단계에서 이미 생성되므로 확장에서 제외
  */
 const BACKGROUND_VARIATIONS = {
-  wide: 'Generate the exact same location from the reference image. Disney Pixar 3D animation style. Wide establishing shot, panoramic view showing the full environment. No characters present. Cinematic lighting with depth and atmosphere. Maintain identical architectural details, colors, and mood.',
-  medium: 'Generate the exact same location from the reference image. Disney Pixar 3D animation style. Medium shot with balanced framing, leaving space in foreground for characters. No characters present. Cinematic lighting. Maintain identical architectural details, colors, and mood.',
+  medium: 'Generate the exact same location from the reference image. Disney Pixar 3D animation style. COMPOSITION: Medium close-up shot, 50-degree field of view, zoomed in to show central area detail, large empty space in foreground (bottom 30% of frame) for character placement, background elements slightly out of focus. No characters present. Cinematic lighting. Maintain identical architectural details, colors, and mood.',
 } as const
 
 type CharacterVariation = keyof typeof CHARACTER_VARIATIONS
@@ -61,8 +61,9 @@ const ExpandRequestSchema = z.object({
     url: z.string(),
   })),
   formFactor: z.enum(['longform', 'shortform']).default('longform'),
-  characterVariations: z.array(z.enum(['front', 'three_quarter', 'happy', 'sad'])).optional(),
-  backgroundVariations: z.array(z.enum(['wide', 'medium'])).optional(),
+  // front/wide는 앵커 생성 단계에서 이미 생성되므로 기본값에서 제외
+  characterVariations: z.array(z.enum(['three_quarter', 'happy', 'sad'])).optional(),
+  backgroundVariations: z.array(z.enum(['medium'])).optional(),
 })
 
 /**
@@ -70,8 +71,8 @@ const ExpandRequestSchema = z.object({
  *
  * 앵커 이미지를 다양한 각도/표정으로 확장
  *
- * - 캐릭터: front, three_quarter, happy, sad (4종)
- * - 배경: wide, medium (2종)
+ * - 캐릭터: three_quarter, happy, sad (3종) - front는 앵커 원본 사용
+ * - 배경: medium (1종) - wide는 앵커 원본 사용
  *
  * 서비스 연동:
  * - Primary: Direct Gemini API (gemini-3-pro-image-preview)
@@ -86,8 +87,9 @@ export const POST = createApiHandler<ExpandResponse>(
       sessionId,
       anchors,
       formFactor = 'longform',
-      characterVariations = ['front', 'three_quarter', 'happy', 'sad'],
-      backgroundVariations = ['wide', 'medium'],
+      // front/wide는 앵커 원본을 사용하므로 제외
+      characterVariations = ['three_quarter', 'happy', 'sad'],
+      backgroundVariations = ['medium'],
     } = validated
 
     // Get aspect ratios from form factor preset

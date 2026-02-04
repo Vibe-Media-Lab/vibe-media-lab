@@ -16,7 +16,9 @@ import type {
   TextToVideoParams,
   GenerationResult,
 } from './types'
+import { getLogger } from '@/lib/logger'
 
+const logger = getLogger('video-service')
 const IS_MOCK = !isKieaiAvailable()
 
 // ============================================================
@@ -29,6 +31,12 @@ export async function imageToVideo(
   if (IS_MOCK) {
     return mockImageToVideo(params)
   }
+
+  const startTime = Date.now()
+  logger.info('Starting image-to-video generation', {
+    imageUrl: params.imageUrl.slice(0, 50) + '...',
+    duration: params.duration || '5',
+  })
 
   try {
     const input: Record<string, unknown> = {
@@ -43,6 +51,7 @@ export async function imageToVideo(
     }
 
     const taskId = await createTask('kling-2.6/image-to-video', input)
+    logger.info('Task created', { taskId })
 
     // Video generation takes longer (2-5 minutes)
     const result = await waitForTask(taskId, {
@@ -50,10 +59,28 @@ export async function imageToVideo(
       pollIntervalMs: 10000,
     })
 
+    // resultJson이 문자열일 수 있음 - 파싱 필요
+    let parsedResult = result.resultJson
+    if (typeof result.resultJson === 'string') {
+      try {
+        parsedResult = JSON.parse(result.resultJson)
+      } catch {
+        parsedResult = {}
+      }
+    }
+
     const url =
-      result.resultJson?.url ||
-      result.resultJson?.video_url ||
-      (result.resultJson?.urls as string[])?.[0]
+      parsedResult?.url ||
+      parsedResult?.video_url ||
+      (parsedResult?.urls as string[])?.[0] ||
+      (parsedResult?.resultUrls as string[])?.[0]
+
+    const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1)
+    logger.info('Video generation completed', {
+      taskId,
+      hasUrl: !!url,
+      elapsedSec,
+    })
 
     return {
       success: true,
@@ -67,8 +94,18 @@ export async function imageToVideo(
       },
     }
   } catch (error) {
+    const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1)
     const message =
       error instanceof KieaiError ? error.message : 'Video generation failed'
+
+    logger.error('Video generation failed', {
+      error: message,
+      errorType: error instanceof KieaiError ? 'KieaiError' : 'Unknown',
+      errorStack: error instanceof Error ? error.stack : undefined,
+      imageUrl: params.imageUrl.slice(0, 50) + '...',
+      elapsedSec,
+    })
+
     return {
       success: false,
       error: message,
@@ -183,10 +220,19 @@ export async function generateVideosSequentially(
 ): Promise<GenerationResult[]> {
   const results: GenerationResult[] = []
   const total = tasks.length
+  const startTime = Date.now()
+
+  logger.info('Starting sequential video generation', { total })
 
   for (let i = 0; i < total; i++) {
     const task = tasks[i]
     if (!task) continue
+
+    logger.info(`Processing video ${i + 1}/${total}`, {
+      shotIndex: i,
+      prompt: task.prompt.slice(0, 50) + '...',
+      duration: task.duration,
+    })
 
     const result = await imageToVideo({
       imageUrl: task.imageUrl,
@@ -195,7 +241,39 @@ export async function generateVideosSequentially(
     })
 
     results.push(result)
+
+    if (!result.success) {
+      logger.warn(`Video ${i + 1}/${total} failed`, {
+        shotIndex: i,
+        error: result.error,
+      })
+    } else {
+      logger.info(`Video ${i + 1}/${total} completed`, {
+        shotIndex: i,
+        hasUrl: !!result.url,
+      })
+    }
+
     onProgress?.(i + 1, total, result)
+  }
+
+  const elapsedMin = ((Date.now() - startTime) / 60000).toFixed(1)
+  const successCount = results.filter((r) => r.success && r.url).length
+  const failedCount = total - successCount
+
+  logger.info('Sequential video generation completed', {
+    total,
+    successCount,
+    failedCount,
+    elapsedMin,
+  })
+
+  if (failedCount > 0) {
+    logger.warn('Some videos failed to generate', {
+      failedIndices: results
+        .map((r, i) => (!r.success || !r.url ? i : -1))
+        .filter((i) => i >= 0),
+    })
   }
 
   return results
