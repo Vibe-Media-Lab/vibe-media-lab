@@ -64,3 +64,6 @@ export const POST = createApiHandler<ShotsResponse>(
     }
   }
 )
+
+// 샷 이미지 생성은 시간이 오래 걸림
+export const maxDuration = 300

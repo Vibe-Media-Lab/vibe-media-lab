@@ -96,3 +96,6 @@ export const POST = createApiHandler<AnchorsResponse>(
     }
   }
 )
+
+// 앵커 이미지 생성은 시간이 오래 걸림
+export const maxDuration = 300

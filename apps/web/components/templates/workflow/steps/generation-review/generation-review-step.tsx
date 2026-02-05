@@ -384,6 +384,105 @@ export function GenerationReviewStep({
     return actionMap[config.generateAction || ''] || ''
   }
 
+  // 순차적 앵커 확장 (캐릭터 → 배경 분할 요청)
+  const handleSequentialExpandGenerate = async (
+    endpoint: string,
+    anchors: Array<{ id: string; category: string; name: string; url: string }>,
+    baseRequest: Record<string, unknown>
+  ) => {
+    const characterAnchors = anchors.filter((a) => a.category === 'character')
+    const backgroundAnchors = anchors.filter((a) => a.category === 'background')
+
+    const allExpanded: Array<{
+      id: string
+      originalId: string
+      category: string
+      name: string
+      variation: string
+      url: string
+    }> = []
+
+    // 1단계: 캐릭터 확장 (3캐릭터 × 3변형 = 9개)
+    if (characterAnchors.length > 0) {
+      setProgress((prev) => ({
+        ...prev,
+        current: 0,
+        message: `캐릭터 확장 중... (${characterAnchors.length}개)`,
+      }))
+
+      const charResponse = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...baseRequest,
+          anchors: characterAnchors,
+        }),
+      })
+
+      if (!charResponse.ok) {
+        const errorData = await charResponse.json().catch(() => ({}))
+        throw new Error(errorData.error || `캐릭터 확장 실패: ${charResponse.status}`)
+      }
+
+      const charResult = await charResponse.json()
+      const charExpanded = charResult.data?.expanded || charResult.expanded || []
+      allExpanded.push(...charExpanded)
+
+      setProgress((prev) => ({
+        ...prev,
+        current: 1,
+        message: `캐릭터 확장 완료! 배경 확장 준비 중...`,
+      }))
+    }
+
+    // 2단계: 배경 확장 (3배경 × 1변형 = 3개)
+    if (backgroundAnchors.length > 0) {
+      setProgress((prev) => ({
+        ...prev,
+        message: `배경 확장 중... (${backgroundAnchors.length}개)`,
+      }))
+
+      const bgResponse = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...baseRequest,
+          anchors: backgroundAnchors,
+        }),
+      })
+
+      if (!bgResponse.ok) {
+        const errorData = await bgResponse.json().catch(() => ({}))
+        throw new Error(errorData.error || `배경 확장 실패: ${bgResponse.status}`)
+      }
+
+      const bgResult = await bgResponse.json()
+      const bgExpanded = bgResult.data?.expanded || bgResult.expanded || []
+      allExpanded.push(...bgExpanded)
+    }
+
+    // 전체 결과 병합
+    const successCount = allExpanded.filter((e) => !e.url.includes('error=true')).length
+    const failedCount = allExpanded.filter((e) => e.url.includes('error=true')).length
+
+    onChange({
+      data: {
+        success: true,
+        data: {
+          sessionId: baseRequest.sessionId,
+          expanded: allExpanded,
+          stats: {
+            total: allExpanded.length,
+            success: successCount,
+            failed: failedCount,
+          },
+        },
+      },
+      generatedAt: new Date(),
+    })
+    setStatus('reviewing')
+  }
+
   // 순차적 비디오 생성 (클라이언트에서 하나씩 요청)
   const handleSequentialVideoGenerate = async (
     endpoint: string,
@@ -549,6 +648,36 @@ export function GenerationReviewStep({
           }))
 
           await handleSequentialVideoGenerate(endpoint, shotsData, requestBody)
+          return
+        }
+
+        // 앵커 확장은 캐릭터/배경 분할 요청으로 처리
+        if (config.generateAction === 'kids/expand') {
+          const anchorsData = requestBody.anchors as Array<{
+            id: string
+            category: string
+            name: string
+            url: string
+          }> | undefined
+
+          if (!anchorsData || anchorsData.length === 0) {
+            throw new Error('확장할 앵커 데이터가 없습니다')
+          }
+
+          const charCount = anchorsData.filter((a) => a.category === 'character').length
+          const bgCount = anchorsData.filter((a) => a.category === 'background').length
+
+          setProgress((prev) => ({
+            ...prev,
+            total: 2, // 캐릭터 + 배경 2단계
+            message: `앵커 확장 시작... (캐릭터 ${charCount}개, 배경 ${bgCount}개)`,
+            items: [
+              { id: 'characters', label: '캐릭터 확장', status: 'processing' as const },
+              { id: 'backgrounds', label: '배경 확장', status: 'pending' as const },
+            ],
+          }))
+
+          await handleSequentialExpandGenerate(endpoint, anchorsData, requestBody)
           return
         }
 
