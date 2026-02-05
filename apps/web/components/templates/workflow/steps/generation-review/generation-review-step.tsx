@@ -117,6 +117,9 @@ export function GenerationReviewStep({
   const [error, setError] = React.useState<string | null>(null)
   const [selectedBgmIndex, setSelectedBgmIndex] = React.useState<number>(0)
   const [completedUrls, setCompletedUrls] = React.useState<Record<string, string>>({})
+  // 오디오 재생성 선택 기능
+  const [regenerateMode, setRegenerateMode] = React.useState(false)
+  const [selectedForRegenerate, setSelectedForRegenerate] = React.useState<Set<string>>(new Set())
 
   // Reset status when stepId changes (switching between steps)
   React.useEffect(() => {
@@ -131,7 +134,23 @@ export function GenerationReviewStep({
       message: '',
     })
     setCompletedUrls({})
+    setRegenerateMode(false)
+    setSelectedForRegenerate(new Set())
   }, [stepId, value, config.previewType])
+
+  // 재생성 항목 토글 핸들러
+  const handleToggleRegenerate = (id: string, isBgm: boolean) => {
+    setSelectedForRegenerate(prev => {
+      const next = new Set(prev)
+      const key = isBgm ? 'bgm' : id
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
 
   // Helper to unwrap API response: { success, data: { ... }, meta } -> { ... }
   const unwrapApiResponse = <T,>(stepData: { data?: { success?: boolean; data?: T } } | undefined): T | undefined => {
@@ -222,20 +241,95 @@ export function GenerationReviewStep({
           shots: shots || currentValueShots || [],
         }
 
-      case 'kids/audio':
+      case 'kids/audio': {
+        // 기존 audio 응답이 있으면 existingTts, existingBgm으로 전달 (선택한 것만 재생성)
+        // 기존 데이터는 value 또는 inputContext.audio에 있을 수 있음
+        const valueData = value as unknown as Record<string, unknown> | undefined
+        const inputAudioData = inputContext?.audio as unknown as Record<string, unknown> | undefined
+
+        // value 또는 inputContext.audio에서 데이터 추출
+        // API 응답 구조: { data: { success: true, data: { tts, bgmTracks } } }
+        const audioSource = valueData || inputAudioData
+        let audioData = audioSource?.data as Record<string, unknown> | undefined
+        // 이중 래핑된 경우 언래핑
+        if (audioData && 'success' in audioData && 'data' in audioData) {
+          audioData = audioData.data as Record<string, unknown>
+        }
+        // audioSource 자체에 tts가 있는 경우 (직접 데이터)
+        if (!audioData?.tts && audioSource?.tts) {
+          audioData = audioSource as Record<string, unknown>
+        }
+
+        const existingTts = audioData?.tts as Array<{ id: string; shotNumber: number; audioUrl: string; duration: number }> | undefined
+        const existingBgm = audioData?.bgmTracks as Array<{ id: string; url: string; duration: number; title?: string; imageUrl?: string }> | undefined
+
+        console.log('[DEBUG kids/audio] regenerateMode:', regenerateMode)
+        console.log('[DEBUG kids/audio] selectedForRegenerate:', Array.from(selectedForRegenerate))
+        console.log('[DEBUG kids/audio] existingTts count:', existingTts?.length)
+        console.log('[DEBUG kids/audio] existingBgm count:', existingBgm?.length)
+
+        // 재생성 모드: 선택된 항목만 재생성
+        if (regenerateMode && selectedForRegenerate.size > 0) {
+          const regenerateBgm = selectedForRegenerate.has('bgm')
+          const selectedTtsIds = Array.from(selectedForRegenerate).filter(id => id !== 'bgm')
+
+          // 기존 TTS가 있으면 선택된 것만 audioUrl 비워서 재생성 트리거
+          const modifiedTts = existingTts?.map(t => {
+            if (selectedTtsIds.includes(t.id)) {
+              return { ...t, audioUrl: '' } // audioUrl 비우면 재생성됨
+            }
+            return t
+          }) || []
+
+          const hasSelectedTts = selectedTtsIds.length > 0
+
+          // BGM만 재생성하거나 TTS 일부만 재생성
+          if (regenerateBgm || hasSelectedTts) {
+            console.log('[DEBUG kids/audio] Selective regeneration:', {
+              regenerateBgm,
+              selectedTtsIds,
+              modifiedTtsCount: modifiedTts.length,
+            })
+
+            return {
+              ...baseRequest,
+              shots: shots || [],
+              bgmPrompt: (script as { bgmPrompt?: string })?.bgmPrompt || '',
+              bgmDirection: (story as { bgmDirection?: string })?.bgmDirection,
+              // TTS: 기존 데이터 전달 (선택된 것은 audioUrl이 비어있음)
+              existingTts: modifiedTts.length > 0 ? modifiedTts : undefined,
+              // BGM: 재생성 선택되면 전달하지 않음 (새로 생성)
+              ...(regenerateBgm ? {} : existingBgm ? { existingBgm } : {}),
+            }
+          }
+        }
+
+        // 일반 모드: 실패한 TTS가 있는지 확인
+        const hasFailedTts = existingTts?.some((t) => !t.audioUrl)
+
         return {
           ...baseRequest,
           shots: shots || [],
           bgmPrompt: (script as { bgmPrompt?: string })?.bgmPrompt || '',
+          bgmDirection: (story as { bgmDirection?: string })?.bgmDirection,
+          // 기존 데이터가 있고 실패한 TTS가 있을 때만 전달
+          ...(hasFailedTts && existingTts ? { existingTts } : {}),
+          ...(hasFailedTts && existingBgm ? { existingBgm } : {}),
         }
+      }
 
       case 'kids/final': {
         // videos와 audio 응답에서 데이터 추출
         const videosData = inputContext?.videos as { data?: { success?: boolean; data?: { shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> } } } | undefined
-        const audioData = inputContext?.audio as { data?: { success?: boolean; data?: { tts?: Array<{ id: string; audioUrl: string; duration: number }>; bgmTracks?: Array<{ id: string; url: string; duration: number }> } } } | undefined
+        const audioData = inputContext?.audio as { data?: { success?: boolean; data?: { tts?: Array<{ id: string; shotNumber: number; audioUrl: string; duration: number }>; bgmTracks?: Array<{ id: string; url: string; duration: number }> } } } | undefined
 
         const videosResponse = videosData?.data?.data || videosData?.data as { shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> } | undefined
-        const audioResponse = audioData?.data?.data || audioData?.data as { tts?: Array<{ id: string; audioUrl: string; duration: number }>; bgmTracks?: Array<{ id: string; url: string; duration: number }> } | undefined
+        const audioResponse = audioData?.data?.data || audioData?.data as { tts?: Array<{ id: string; shotNumber: number; audioUrl: string; duration: number }>; bgmTracks?: Array<{ id: string; url: string; duration: number }> } | undefined
+
+        // DEBUG: 데이터 매핑 확인
+        console.log('[DEBUG kids/final] inputContext:', inputContext)
+        console.log('[DEBUG kids/final] videosResponse:', videosResponse)
+        console.log('[DEBUG kids/final] audioResponse:', audioResponse)
 
         // shots 데이터 병합 (video + audio)
         const videoShots = videosResponse?.shots || []
@@ -243,14 +337,23 @@ export function GenerationReviewStep({
         // BGM: 사용자가 선택한 트랙 사용
         const bgmUrl = audioResponse?.bgmTracks?.[selectedBgmIndex]?.url || audioResponse?.bgmTracks?.[0]?.url || ''
 
-        const mergedShots = videoShots.map((vShot) => {
-          const tts = ttsData.find((t) => t.id === vShot.id)
+        // DEBUG: 실제 데이터 구조 확인
+        console.log('[DEBUG] videoShots:', videoShots.map(v => ({ id: v.id, shotNumber: v.shotNumber })))
+        console.log('[DEBUG] ttsData FULL:', ttsData)
+        console.log('[DEBUG] ttsData audioUrls:', ttsData.map(t => ({ shotNumber: t.shotNumber, audioUrl: t.audioUrl })))
+
+        const mergedShots = videoShots.map((vShot, index) => {
+          // shotNumber로 매칭 (세션이 다르면 ID가 다르므로)
+          const tts = ttsData.find((t) => t.shotNumber === vShot.shotNumber)
+          // 매칭 실패 시 인덱스로 fallback
+          const ttsFallback = tts || ttsData[index]
+          console.log(`[DEBUG] Shot ${vShot.shotNumber}: tts found=${!!tts}, fallback=${!!ttsFallback}`)
           return {
             id: vShot.id,
             shotNumber: vShot.shotNumber,
-            duration: tts?.duration || 10,
+            duration: 10, // 고정 10초 (총 70초 = 7샷 × 10초)
             videoUrl: vShot.videoUrl || '',
-            audioUrl: tts?.audioUrl || '',
+            audioUrl: ttsFallback?.audioUrl || '',
           }
         })
 
@@ -682,16 +785,52 @@ export function GenerationReviewStep({
               onDownloadItem={handleDownloadItem}
               selectedBgmIndex={selectedBgmIndex}
               onSelectBgm={setSelectedBgmIndex}
+              // 오디오 재생성 선택 기능
+              regenerateMode={regenerateMode}
+              selectedForRegenerate={selectedForRegenerate}
+              onToggleRegenerate={handleToggleRegenerate}
             />
 
             <div className="flex justify-center gap-3 pt-4">
+              {/* 오디오 단계에서만 선택 재생성 버튼 표시 */}
+              {config.previewType === 'audio-player' && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (regenerateMode) {
+                      // 재생성 모드 종료 시 선택 초기화
+                      setSelectedForRegenerate(new Set())
+                    }
+                    setRegenerateMode(!regenerateMode)
+                  }}
+                  className={cn(
+                    'border-white/30 bg-transparent hover:bg-white/10',
+                    regenerateMode
+                      ? 'text-[var(--color-neon-cyan)] border-[var(--color-neon-cyan)]'
+                      : 'text-white'
+                  )}
+                >
+                  {regenerateMode ? '선택 취소' : '선택 재생성'}
+                </Button>
+              )}
               <Button
                 variant="outline"
-                onClick={handleRegenerate}
+                onClick={() => {
+                  // 재생성 모드일 때는 선택된 항목만 재생성
+                  if (regenerateMode && selectedForRegenerate.size > 0) {
+                    handleRegenerate()
+                    setRegenerateMode(false)
+                  } else {
+                    handleRegenerate()
+                  }
+                }}
                 className="border-white/30 bg-transparent text-white hover:bg-white/10"
+                disabled={regenerateMode && selectedForRegenerate.size === 0}
               >
                 <RotateCcw className="mr-2 h-4 w-4" />
-                재생성
+                {regenerateMode && selectedForRegenerate.size > 0
+                  ? `선택 항목 재생성 (${selectedForRegenerate.size}개)`
+                  : '전체 재생성'}
               </Button>
               <Button
                 onClick={handleApprove}

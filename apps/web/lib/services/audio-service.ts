@@ -18,6 +18,7 @@ import { getLogger } from '@/lib/logger'
 
 const logger = getLogger('audio-service')
 import { saveToLibrary } from './library-saver'
+import { uploadMedia } from './supabase-storage'
 import type {
   TTSParams,
   TTSBatchParams,
@@ -34,82 +35,133 @@ const IS_MOCK = !isKieaiAvailable()
 // Text to Speech (ElevenLabs)
 // ============================================================
 
+const TTS_MAX_RETRIES = 3
+const TTS_RETRY_DELAY_MS = 2000
+
 export async function generateTTS(params: TTSParams): Promise<GenerationResult> {
   if (IS_MOCK) {
     return mockGenerateTTS(params)
   }
 
-  try {
-    const taskId = await createTask(
-      'elevenlabs/text-to-speech-multilingual-v2',
-      {
-        text: params.text,
-        voice: params.voice || 'Rachel',
-        language_code: params.languageCode || 'ko',
-        speed: params.speed ?? 1,
-        stability: params.stability ?? 0.5,
-        similarity_boost: params.similarityBoost ?? 0.75,
-        style: params.style ?? 0,
+  let lastError: string = 'TTS generation failed'
+
+  for (let attempt = 1; attempt <= TTS_MAX_RETRIES; attempt++) {
+    try {
+      const result = await generateTTSInternal(params)
+
+      // URL이 없으면 실패로 간주하고 재시도
+      if (!result.url) {
+        logger.warn('TTS generation returned no URL', {
+          attempt,
+          maxRetries: TTS_MAX_RETRIES,
+          text: params.text.slice(0, 30) + '...',
+        })
+        lastError = 'TTS generation returned no URL'
+
+        if (attempt < TTS_MAX_RETRIES) {
+          await sleep(TTS_RETRY_DELAY_MS * attempt) // 점진적 백오프
+          continue
+        }
       }
-    )
 
-    const result = await waitForTask(taskId, { maxWaitMs: 120000 })
-
-    // resultJson이 문자열일 수 있음 - 파싱 필요
-    let parsedResult = result.resultJson
-    if (typeof result.resultJson === 'string') {
-      try {
-        parsedResult = JSON.parse(result.resultJson)
-      } catch {
-        parsedResult = {}
+      if (attempt > 1) {
+        logger.info('TTS generation succeeded after retry', { attempt })
       }
-    }
 
-    const url =
-      parsedResult?.url ||
-      parsedResult?.audio_url ||
-      (parsedResult?.urls as string[])?.[0] ||
-      (parsedResult?.resultUrls as string[])?.[0]
+      return result
+    } catch (error) {
+      lastError = error instanceof KieaiError ? error.message : 'TTS generation failed'
 
-    const duration = estimateTTSDuration(params.text)
-
-    // 자동 Library 저장 (userId가 있을 때만)
-    if (url && params.userId) {
-      await saveToLibrary({
-        userId: params.userId,
-        mediaType: 'tts',
-        prompt: params.text,
-        outputUrl: url,
-        provider: 'kieai',
-        model: 'elevenlabs',
-        durationSeconds: duration,
-        config: {
-          sessionId: params.sessionId,
-          voice: params.voice || 'Rachel',
-          languageCode: params.languageCode || 'ko',
-          ...params.metadata,
-        },
+      logger.warn('TTS generation attempt failed', {
+        attempt,
+        maxRetries: TTS_MAX_RETRIES,
+        error: lastError,
       })
-    }
 
-    return {
-      success: true,
-      url,
-      taskId,
-      metadata: {
-        text: params.text.slice(0, 50) + (params.text.length > 50 ? '...' : ''),
+      if (attempt < TTS_MAX_RETRIES) {
+        await sleep(TTS_RETRY_DELAY_MS * attempt) // 점진적 백오프
+      }
+    }
+  }
+
+  logger.error('TTS generation failed after all retries', {
+    maxRetries: TTS_MAX_RETRIES,
+    error: lastError,
+  })
+
+  return {
+    success: false,
+    error: lastError,
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function generateTTSInternal(params: TTSParams): Promise<GenerationResult> {
+  const taskId = await createTask(
+    'elevenlabs/text-to-speech-multilingual-v2',
+    {
+      text: params.text,
+      voice: params.voice || 'Rachel',
+      language_code: params.languageCode || 'ko',
+      speed: params.speed ?? 1,
+      stability: params.stability ?? 0.5,
+      similarity_boost: params.similarityBoost ?? 0.75,
+      style: params.style ?? 0,
+    }
+  )
+
+  const result = await waitForTask(taskId, { maxWaitMs: 120000 })
+
+  // resultJson이 문자열일 수 있음 - 파싱 필요
+  let parsedResult = result.resultJson
+  if (typeof result.resultJson === 'string') {
+    try {
+      parsedResult = JSON.parse(result.resultJson)
+    } catch {
+      parsedResult = {}
+    }
+  }
+
+  const url =
+    parsedResult?.url ||
+    parsedResult?.audio_url ||
+    (parsedResult?.urls as string[])?.[0] ||
+    (parsedResult?.resultUrls as string[])?.[0]
+
+  const duration = estimateTTSDuration(params.text)
+
+  // 자동 Library 저장 (userId가 있을 때만)
+  if (url && params.userId) {
+    await saveToLibrary({
+      userId: params.userId,
+      mediaType: 'tts',
+      prompt: params.text,
+      outputUrl: url,
+      provider: 'kieai',
+      model: 'elevenlabs',
+      durationSeconds: duration,
+      config: {
+        sessionId: params.sessionId,
         voice: params.voice || 'Rachel',
         languageCode: params.languageCode || 'ko',
-        estimatedDuration: duration,
+        ...params.metadata,
       },
-    }
-  } catch (error) {
-    const message =
-      error instanceof KieaiError ? error.message : 'TTS generation failed'
-    return {
-      success: false,
-      error: message,
-    }
+    })
+  }
+
+  return {
+    success: true,
+    url,
+    taskId,
+    metadata: {
+      text: params.text.slice(0, 50) + (params.text.length > 50 ? '...' : ''),
+      voice: params.voice || 'Rachel',
+      languageCode: params.languageCode || 'ko',
+      estimatedDuration: duration,
+    },
   }
 }
 
@@ -232,6 +284,49 @@ async function mockBatchGenerateTTS(
 // BGM Generation (Suno)
 // ============================================================
 
+/**
+ * Download audio from URL for storage upload
+ * This is called immediately after BGM generation when URL is still valid
+ */
+async function downloadAudioForStorage(url: string): Promise<Buffer | null> {
+  try {
+    logger.debug('Downloading BGM for storage', { url: url.slice(0, 50) + '...' })
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'audio/*,*/*',
+      },
+      redirect: 'follow',
+    })
+
+    if (!response.ok) {
+      logger.warn('BGM download failed', { status: response.status })
+      return null
+    }
+
+    const arrayBuffer = await response.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    if (buffer.length < 1000) {
+      logger.warn('BGM download returned too small data', { size: buffer.length })
+      return null
+    }
+
+    logger.debug('BGM downloaded for storage', {
+      size: buffer.length,
+      sizeKB: Math.round(buffer.length / 1024),
+    })
+
+    return buffer
+  } catch (error) {
+    logger.warn('BGM download error', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+    return null
+  }
+}
+
 export async function generateBGM(params: BGMParams): Promise<BGMGenerationResult> {
   if (IS_MOCK) {
     logger.info('Using mock BGM generation')
@@ -308,9 +403,41 @@ export async function generateBGM(params: BGMParams): Promise<BGMGenerationResul
 
     logger.info('BGM tracks extracted', { trackCount: tracks.length })
 
-    // 자동 Library 저장 (userId가 있을 때만, 모든 트랙 저장)
+    // userId가 있으면 Supabase Storage에 업로드하여 영구 URL 확보
     if (tracks.length > 0 && params.userId) {
       for (const track of tracks) {
+        try {
+          // kie.ai URL에서 오디오 다운로드
+          const audioBuffer = await downloadAudioForStorage(track.url)
+
+          if (audioBuffer) {
+            // Supabase Storage에 업로드
+            const uploadResult = await uploadMedia({
+              file: audioBuffer,
+              userId: params.userId,
+              mediaType: 'audio',
+              contentType: 'audio/mp3',
+            })
+
+            if (uploadResult.success && uploadResult.url) {
+              logger.info('BGM uploaded to Supabase Storage', {
+                trackId: track.id,
+                originalUrl: track.url.slice(0, 50) + '...',
+                permanentUrl: uploadResult.url.slice(0, 50) + '...',
+              })
+              // 영구 URL로 교체
+              track.url = uploadResult.url
+            }
+          }
+        } catch (uploadError) {
+          // 업로드 실패해도 원본 URL 유지
+          logger.warn('Failed to upload BGM to storage, keeping original URL', {
+            trackId: track.id,
+            error: uploadError instanceof Error ? uploadError.message : 'Unknown error',
+          })
+        }
+
+        // Library에 저장 (영구 URL 또는 원본 URL)
         await saveToLibrary({
           userId: params.userId,
           mediaType: 'bgm',

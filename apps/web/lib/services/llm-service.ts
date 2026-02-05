@@ -329,7 +329,7 @@ ${ZOOTOPIA_PROTOCOL_PROMPT}
     "locationVisualDescriptions": ["English visual description of location 1", "English visual description of location 2", "English visual description of location 3"],
     "atmosphere": "분위기 (한글)"
   },
-  "bgmDirection": "영어로 BGM 방향 설명 (예: Orchestral with playful woodwinds, building to heroic brass in climax. Start gentle and hopeful, build through adventure, dramatic tension at twist, triumphant finale)"
+  "bgmDirection": "영어로 BGM 방향 설명. 반드시 'Keep it short, around 1 minute (70 seconds)' 포함. 예: Orchestral with playful woodwinds, building to heroic brass in climax. Keep it short, around 1 minute (70 seconds). Do not exceed 80 seconds."
 }
 
 ## 필수 규칙
@@ -458,7 +458,7 @@ async function mockGenerateStory(
       ],
       atmosphere: '밝고 따뜻하며, 모험과 우정이 넘치는 분위기',
     },
-    bgmDirection: `Orchestral children's animation music with playful woodwinds and gentle strings. Start with hopeful, curious melody (piano and flute). Build to adventurous theme with added percussion. Dramatic tension during twist with minor key shift. Triumphant brass fanfare for action scene. Resolve with warm, heartfelt strings and gentle piano for happy ending. Style: ${styleConfig.description}, suitable for ages 5-12.`,
+    bgmDirection: `Orchestral children's animation music with playful woodwinds and gentle strings. Start with hopeful, curious melody (piano and flute). Build to adventurous theme with added percussion. Dramatic tension during twist with minor key shift. Triumphant brass fanfare for action scene. Resolve with warm, heartfelt strings and gentle piano for happy ending. Style: ${styleConfig.description}, suitable for ages 5-12. Keep it short, around 1 minute (70 seconds). Do not exceed 80 seconds.`,
   }
 }
 
@@ -586,9 +586,10 @@ ${plotInfo}
 
 8. **bgmPrompt**: 영어, 아동용 애니메이션 BGM 프롬프트
    - 필수 포함: 장르/분위기, 스토리 감정 흐름 (hopeful→surprised→adventurous→sad→brave→joyful)
+   - **필수**: "Keep it short, around 1 minute (70 seconds). Do not exceed 80 seconds." 문구 포함
    - 조건: instrumental only, 3-7세 적합, ${styleConfig.description} 스타일
    - 스토리의 핵심 테마와 감정 변화를 음악으로 표현
-   - 예: "Cheerful orchestral music with gentle piano intro, building to adventurous strings, soft emotional moment, triumphant brass finale"
+   - 예: "Cheerful orchestral music with gentle piano intro, building to adventurous strings, triumphant brass finale. Keep it short, around 1 minute (70 seconds)."
 `
 
   const response = await callGemini(prompt)
@@ -708,7 +709,7 @@ async function mockGenerateScript(
 
   const totalDuration = shots.reduce((sum, shot) => sum + shot.duration, 0)
 
-  const bgmPrompt = `Cheerful, uplifting orchestral music for a children's animation. ${style} style, ${styleConfig.description} atmosphere. Magical adventure theme with emotional peaks matching the 6-act story structure. Duration: ${totalDuration} seconds. Instrumental only, suitable for kids aged 3-7. Start gentle and hopeful, build through adventure, crescendo at action scene, resolve warmly.`
+  const bgmPrompt = `Cheerful, uplifting orchestral music for a children's animation. ${style} style, ${styleConfig.description} atmosphere. Magical adventure theme with emotional peaks matching the 6-act story structure. Instrumental only, suitable for kids aged 3-7. Start gentle and hopeful, build through adventure, crescendo at action scene, resolve warmly. Keep it short, around 1 minute (${totalDuration} seconds). Do not exceed ${totalDuration + 10} seconds.`
 
   return {
     totalDuration,

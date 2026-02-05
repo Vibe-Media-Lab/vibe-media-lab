@@ -150,4 +150,8 @@ export interface PreviewProps {
   onDownloadItem?: (itemId: string, url: string) => void
   selectedBgmIndex?: number
   onSelectBgm?: (index: number) => void
+  // 오디오 재생성 선택 기능
+  regenerateMode?: boolean
+  selectedForRegenerate?: Set<string>
+  onToggleRegenerate?: (id: string, isBgm: boolean) => void
 }

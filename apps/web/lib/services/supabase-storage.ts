@@ -5,14 +5,35 @@
  * Bucket structure: {user_id}/{media_type}/{filename}
  */
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 const BUCKET_NAME = 'media-assets'
+
+/**
+ * Create Supabase Admin Client with Service Role Key
+ * This bypasses RLS policies for server-side operations
+ */
+function createAdminClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Missing Supabase admin environment variables (SUPABASE_SERVICE_ROLE_KEY)')
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+}
 
 export interface UploadMediaParams {
   file: Buffer | Blob
   userId: string
-  mediaType: 'image' | 'video'
+  mediaType: 'image' | 'video' | 'audio'
   filename?: string
   contentType?: string
 }
@@ -44,6 +65,10 @@ function generateFilename(originalName?: string, contentType?: string): string {
     'video/mp4': 'mp4',
     'video/webm': 'webm',
     'video/quicktime': 'mov',
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/wav': 'wav',
+    'audio/ogg': 'ogg',
   }
 
   const ext = contentType ? extMap[contentType] || 'bin' : 'bin'
@@ -52,12 +77,13 @@ function generateFilename(originalName?: string, contentType?: string): string {
 
 /**
  * Upload media file to Supabase Storage
+ * Uses Service Role Key to bypass RLS policies
  */
 export async function uploadMedia(
   params: UploadMediaParams
 ): Promise<UploadMediaResult> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const { file, userId, mediaType, filename, contentType } = params
 
     const generatedFilename = generateFilename(filename, contentType)

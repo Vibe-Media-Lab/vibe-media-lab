@@ -107,7 +107,20 @@ function extractAudioItems(data: unknown): AudioItem[] {
   return []
 }
 
-export function Preview({ type, data, editable, onEdit, onRegenerateItem, onLikeItem, onDownloadItem, selectedBgmIndex, onSelectBgm }: PreviewProps) {
+export function Preview({
+  type,
+  data,
+  editable,
+  onEdit,
+  onRegenerateItem,
+  onLikeItem,
+  onDownloadItem,
+  selectedBgmIndex,
+  onSelectBgm,
+  regenerateMode,
+  selectedForRegenerate,
+  onToggleRegenerate,
+}: PreviewProps) {
   switch (type) {
     case 'text':
       return (
@@ -172,6 +185,9 @@ export function Preview({ type, data, editable, onEdit, onRegenerateItem, onLike
           data={extractAudioItems(data)}
           selectedBgmIndex={selectedBgmIndex}
           onSelectBgm={onSelectBgm}
+          regenerateMode={regenerateMode}
+          selectedForRegenerate={selectedForRegenerate}
+          onToggleRegenerate={onToggleRegenerate}
         />
       )
     default:

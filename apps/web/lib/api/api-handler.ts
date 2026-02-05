@@ -76,6 +76,8 @@ export function createApiHandler<T>(
       )
     } catch (error) {
       if (error instanceof ZodError) {
+        // eslint-disable-next-line no-console
+        console.error(`[${requestId}] Validation error:`, JSON.stringify(error.errors, null, 2))
         const apiError = ApiError.fromZodError(error)
         return NextResponse.json(
           errorResponse(apiError, { requestId }),

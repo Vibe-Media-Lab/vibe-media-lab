@@ -163,6 +163,21 @@ export const AudioRequestSchema = z.object({
   })),
   bgmPrompt: z.string(),
   bgmDirection: z.string().optional(), // Story에서 가져온 BGM 방향 (우선순위 높음)
+  // 기존 TTS 데이터 (재생성 시 실패한 것만 다시 생성)
+  existingTts: z.array(z.object({
+    id: z.string(),
+    shotNumber: z.number(),
+    audioUrl: z.string(), // 빈 문자열이면 재생성 필요
+    duration: z.number(),
+  })).optional(),
+  // 기존 BGM 데이터 (재생성 시 유지)
+  existingBgm: z.array(z.object({
+    id: z.string(),
+    url: z.string(),
+    duration: z.number(),
+    title: z.string().optional(),
+    imageUrl: z.string().optional(),
+  })).optional(),
 })
 export type AudioRequest = z.infer<typeof AudioRequestSchema>
 
