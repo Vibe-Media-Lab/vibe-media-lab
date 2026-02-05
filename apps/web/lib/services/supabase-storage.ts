@@ -5,7 +5,6 @@
  * Bucket structure: {user_id}/{media_type}/{filename}
  */
 
-import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 
 const BUCKET_NAME = 'media-assets'
@@ -126,7 +125,7 @@ export async function uploadMedia(
  */
 export async function getPublicUrl(path: string): Promise<string | null> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(path)
     return data.publicUrl
   } catch {
@@ -139,7 +138,7 @@ export async function getPublicUrl(path: string): Promise<string | null> {
  */
 export async function deleteMedia(path: string): Promise<boolean> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const { error } = await supabase.storage.from(BUCKET_NAME).remove([path])
     return !error
   } catch {
@@ -159,7 +158,7 @@ export async function deleteMediaBatch(paths: string[]): Promise<{
   }
 
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const { error } = await supabase.storage.from(BUCKET_NAME).remove(paths)
 
     if (error) {
@@ -180,7 +179,7 @@ export async function listUserMedia(
   mediaType?: 'image' | 'video'
 ): Promise<Array<{ name: string; path: string; size: number }>> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const prefix = mediaType ? `${userId}/${mediaType}` : userId
 
     const { data, error } = await supabase.storage
