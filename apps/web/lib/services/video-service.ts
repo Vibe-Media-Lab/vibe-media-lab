@@ -21,6 +21,20 @@ import { getLogger } from '@/lib/logger'
 const logger = getLogger('video-service')
 const IS_MOCK = !isKieaiAvailable()
 
+/** API 에러 메시지 → 사용자 친화적 메시지 */
+function toUserMessage(raw: string): string {
+  if (raw.toLowerCase().includes('credits insufficient') || raw.toLowerCase().includes('balance')) {
+    return '크레딧이 부족합니다. Kieai 계정에서 크레딧을 충전해주세요.'
+  }
+  if (raw.toLowerCase().includes('timeout')) {
+    return '비디오 생성 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.'
+  }
+  if (raw.toLowerCase().includes('rate limit')) {
+    return '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
+  }
+  return raw
+}
+
 // ============================================================
 // Image to Video
 // ============================================================
@@ -108,11 +122,11 @@ export async function imageToVideo(
     }
   } catch (error) {
     const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1)
-    const message =
+    const rawMessage =
       error instanceof KieaiError ? error.message : 'Video generation failed'
 
     logger.error('Video generation failed', {
-      error: message,
+      error: rawMessage,
       errorType: error instanceof KieaiError ? 'KieaiError' : 'Unknown',
       errorStack: error instanceof Error ? error.stack : undefined,
       imageUrl: params.imageUrl.slice(0, 50) + '...',
@@ -121,7 +135,7 @@ export async function imageToVideo(
 
     return {
       success: false,
-      error: message,
+      error: toUserMessage(rawMessage),
     }
   }
 }

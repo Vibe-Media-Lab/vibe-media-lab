@@ -57,14 +57,37 @@ export async function POST(request: Request) {
       aspectRatio: formFactorPreset.video.aspectRatio,
     })
 
+    // 생성 실패 시 에러 반환
+    if (!result.success) {
+      logger.error('Video generation failed', {
+        sessionId,
+        shotId: shot.id,
+        error: result.error,
+      })
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: result.error || '비디오 생성 실패',
+          data: {
+            id: shot.id,
+            shotNumber: shot.shotNumber,
+            videoUrl: '',
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
     const videoUrl = result.url || ''
 
     if (!videoUrl) {
-      logger.warn('Video generation returned empty URL', {
+      logger.warn('Video generation succeeded but returned empty URL', {
         sessionId,
         shotId: shot.id,
-        success: result.success,
-        error: result.error,
         metadata: result.metadata,
       })
     }

@@ -571,6 +571,7 @@ export function GenerationReviewStep({
       validateRequestBody(videoRequestBody, VideoRequestSchema)
 
       let videoUrl = ''
+      let shotError = ''
       try {
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -581,13 +582,15 @@ export function GenerationReviewStep({
         if (response.ok) {
           const result = await response.json()
           videoUrl = result.data?.videoUrl || ''
+          if (!result.success && result.error) {
+            shotError = result.error
+          }
         } else {
           const errorData = await response.json().catch(() => ({}))
-          const errorMsg = extractErrorMessage(errorData, `HTTP ${response.status}`)
-          console.error(`[Video] Shot ${i + 1} API 에러:`, errorMsg)
+          shotError = extractErrorMessage(errorData, `HTTP ${response.status}`)
         }
       } catch (fetchError) {
-        console.error(`[Video] Shot ${i + 1} 네트워크 에러:`, fetchError)
+        shotError = fetchError instanceof Error ? fetchError.message : '네트워크 에러'
       }
 
       // 결과 저장 (성공/실패 모두)
@@ -617,12 +620,16 @@ export function GenerationReviewStep({
                 : ('pending' as const),
         }))
 
+        const failMessage = shotError
+          ? `비디오 ${i + 1}/${shots.length} 실패: ${shotError}`
+          : `비디오 ${i + 1}/${shots.length} 실패 - 계속 진행`
+
         return {
           ...prev,
           current: i + 1,
           message: videoUrl
             ? `비디오 ${i + 1}/${shots.length} 완료`
-            : `비디오 ${i + 1}/${shots.length} 실패 - 계속 진행`,
+            : failMessage,
           items: updatedItems,
         }
       })
@@ -930,6 +937,11 @@ export function GenerationReviewStep({
       }
 
       const result = await response.json()
+
+      if (!result.success && result.error) {
+        throw new Error(result.error)
+      }
+
       const newVideoUrl = result.data?.videoUrl || ''
 
       if (!newVideoUrl) {
