@@ -255,7 +255,9 @@ export interface ComposeVideoResult {
 export interface ThumbnailGenerateParams extends LibrarySaveOptions {
   title: string
   style: string
-  characters?: string[]
+  logline?: string
+  characters?: Array<{ name: string; visualDescription: string }>
+  referenceUrls?: string[]
 }
 
 export interface ThumbnailGenerateResult {

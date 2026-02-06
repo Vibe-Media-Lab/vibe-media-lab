@@ -17,7 +17,7 @@ import {
   type FalTrack,
   type FalKeyframe,
 } from './fal-client'
-import { generateImage } from './image-service'
+import { generateImage, editImage } from './image-service'
 import { saveToLibrary } from './library-saver'
 import { getLogger } from '@/lib/logger'
 import type {
@@ -251,26 +251,37 @@ export async function generateThumbnail(
   params: ThumbnailGenerateParams
 ): Promise<ThumbnailGenerateResult> {
   try {
-    // Build thumbnail prompt
-    const characterList = params.characters?.join(', ') || ''
-    const prompt = buildThumbnailPrompt(params.title, params.style, characterList)
+    const prompt = buildThumbnailPrompt(params)
+    const hasReferences = params.referenceUrls && params.referenceUrls.length > 0
 
     logger.debug('Generating thumbnail', {
       title: params.title,
       style: params.style,
+      hasReferences,
+      referenceCount: params.referenceUrls?.length ?? 0,
     })
 
-    const result = await generateImage({
-      prompt,
-      aspectRatio: '16:9',
-      resolution: '2K',
+    const baseOpts = {
+      aspectRatio: '16:9' as const,
+      resolution: '2K' as const,
       userId: params.userId,
       sessionId: params.sessionId,
       metadata: {
         type: 'thumbnail',
         ...params.metadata,
       },
-    })
+    }
+
+    const result = hasReferences
+      ? await editImage({
+          ...baseOpts,
+          prompt,
+          referenceUrls: params.referenceUrls!,
+        })
+      : await generateImage({
+          ...baseOpts,
+          prompt,
+        })
 
     if (!result.success || !result.url) {
       return {
@@ -295,11 +306,12 @@ export async function generateThumbnail(
   }
 }
 
-function buildThumbnailPrompt(
-  title: string,
-  style: string,
-  characters: string
-): string {
+function buildThumbnailPrompt(params: {
+  title: string
+  style: string
+  logline?: string
+  characters?: Array<{ name: string; visualDescription: string }>
+}): string {
   const styleDescriptions: Record<string, string> = {
     pixar:
       'Pixar 3D animation style, vibrant colors, expressive characters, cinematic lighting',
@@ -309,17 +321,24 @@ function buildThumbnailPrompt(
       'DreamWorks animation style, dynamic poses, bold colors, energetic composition',
   }
 
-  const styleDesc = styleDescriptions[style] || styleDescriptions['pixar']
+  const styleDesc = styleDescriptions[params.style] || styleDescriptions['pixar']
 
-  let prompt = `YouTube video thumbnail for kids animation titled "${title}". ${styleDesc}. `
+  let prompt = `YouTube video thumbnail for kids animation titled "${params.title}". ${styleDesc}. `
 
-  if (characters) {
-    prompt += `Featured characters: ${characters}. `
+  if (params.logline) {
+    prompt += `Story: ${params.logline}. `
+  }
+
+  if (params.characters && params.characters.length > 0) {
+    const charDescriptions = params.characters
+      .map(c => `${c.name} (${c.visualDescription})`)
+      .join(', ')
+    prompt += `Featured characters: ${charDescriptions}. `
   }
 
   prompt +=
-    'Eye-catching composition, bright and cheerful colors, suitable for children. ' +
-    'Title text should be prominent and readable. High quality, professional looking thumbnail.'
+    'Eye-catching composition, bright and cheerful colors, suitable for children. '
+  prompt += 'High quality, professional looking thumbnail.'
 
   return prompt
 }

@@ -30,7 +30,8 @@ export const POST = createApiHandler<FinalResponse>(
     const body = await request.json()
     const validated = FinalRequestSchema.parse(body)
 
-    const { sessionId, projectId, shots, bgmUrl, style, songVersion } = validated
+    const { sessionId, projectId, shots, bgmUrl, style, songVersion,
+            storyTitle, storyLogline, characters, anchorUrls } = validated
 
     // 총 예상 영상 길이 계산
     const expectedDurationSec = shots.reduce((sum, s) => sum + s.duration, 0)
@@ -141,11 +142,15 @@ export const POST = createApiHandler<FinalResponse>(
     })
 
     // 3. Thumbnail Generation
-    const thumbnailTitle = `Kids Animation - ${style.charAt(0).toUpperCase() + style.slice(1)} Style`
-
     const thumbnailResult = await generateThumbnail({
-      title: thumbnailTitle,
+      title: storyTitle || `Kids Animation - ${style.charAt(0).toUpperCase() + style.slice(1)} Style`,
       style,
+      logline: storyLogline,
+      characters: characters?.map(c => ({
+        name: c.name,
+        visualDescription: c.visualDescription,
+      })),
+      referenceUrls: anchorUrls,
       userId: user?.id,
       projectId,
       sessionId,

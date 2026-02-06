@@ -56,6 +56,8 @@ interface SidebarProps {
   isLoadingProjects: boolean
   onRenameProject: (id: string, title: string) => Promise<void>
   onDeleteProject: (id: string) => void
+  activeProjectId: string | null
+  onProjectSelect: (projectId: string | null) => void
 }
 
 function Sidebar({
@@ -68,6 +70,8 @@ function Sidebar({
   isLoadingProjects,
   onRenameProject,
   onDeleteProject,
+  activeProjectId,
+  onProjectSelect,
 }: SidebarProps) {
   const [personalExpanded, setPersonalExpanded] = React.useState(true)
 
@@ -182,7 +186,7 @@ function Sidebar({
                       In Progress
                     </div>
                     {inProgressProjects.map((project) => (
-                      <ProjectItem key={project.id} project={project} onRename={onRenameProject} onDelete={onDeleteProject} />
+                      <ProjectItem key={project.id} project={project} onRename={onRenameProject} onDelete={onDeleteProject} isActive={activeProjectId === project.id} onSelectAssets={onProjectSelect} />
                     ))}
                   </div>
                 )}
@@ -195,7 +199,7 @@ function Sidebar({
                       Completed
                     </div>
                     {completedProjects.map((project) => (
-                      <ProjectItem key={project.id} project={project} onRename={onRenameProject} onDelete={onDeleteProject} />
+                      <ProjectItem key={project.id} project={project} onRename={onRenameProject} onDelete={onDeleteProject} isActive={activeProjectId === project.id} onSelectAssets={onProjectSelect} />
                     ))}
                   </div>
                 )}
@@ -219,7 +223,7 @@ function Sidebar({
   )
 }
 
-function ProjectItem({ project, onRename, onDelete }: { project: Project; onRename: (id: string, title: string) => Promise<void>; onDelete: (id: string) => void }) {
+function ProjectItem({ project, onRename, onDelete, isActive, onSelectAssets }: { project: Project; onRename: (id: string, title: string) => Promise<void>; onDelete: (id: string) => void; isActive: boolean; onSelectAssets: (projectId: string | null) => void }) {
   const isInProgress = project.status === 'in_progress'
   const [isEditing, setIsEditing] = React.useState(false)
   const [editTitle, setEditTitle] = React.useState(project.title)
@@ -300,36 +304,50 @@ function ProjectItem({ project, onRename, onDelete }: { project: Project; onRena
   }
 
   return (
-    <div className="group flex items-center gap-1 min-w-0">
-      <Link
-        href={`/templates/${project.templateId}/workflow?projectId=${project.id}`}
+    <div className="space-y-0.5">
+      <div className="group flex items-center gap-1 min-w-0">
+        <Link
+          href={`/templates/${project.templateId}/workflow?projectId=${project.id}`}
+          className={cn(
+            'flex-1 min-w-0 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+            'text-white/60 hover:bg-white/5 hover:text-white/80'
+          )}
+        >
+          <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate flex-1">{project.title}</span>
+          {isInProgress && (
+            <span className="shrink-0 h-1.5 w-1.5 rounded-full bg-[var(--color-neon-pink)] animate-pulse" />
+          )}
+        </Link>
+        <button
+          onClick={(e) => {
+            e.preventDefault()
+            setIsEditing(true)
+          }}
+          className="shrink-0 p-1 text-white/30 hover:text-white/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          title="이름 변경"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+        <button
+          onClick={handleDelete}
+          className="shrink-0 p-1 text-white/30 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          title="프로젝트 삭제"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+      <button
+        onClick={() => onSelectAssets(isActive ? null : project.id)}
         className={cn(
-          'flex-1 min-w-0 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
-          'text-white/60 hover:bg-white/5 hover:text-white/80'
+          'w-full flex items-center gap-2 rounded-md pl-8 pr-2 py-1 text-[11px] transition-colors cursor-pointer',
+          isActive
+            ? 'bg-white/10 text-white'
+            : 'text-white/40 hover:bg-white/5 hover:text-white/60'
         )}
       >
-        <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate flex-1">{project.title}</span>
-        {isInProgress && (
-          <span className="shrink-0 h-1.5 w-1.5 rounded-full bg-[var(--color-neon-pink)] animate-pulse" />
-        )}
-      </Link>
-      <button
-        onClick={(e) => {
-          e.preventDefault()
-          setIsEditing(true)
-        }}
-        className="shrink-0 p-1 text-white/30 hover:text-white/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-        title="이름 변경"
-      >
-        <Pencil className="h-3 w-3" />
-      </button>
-      <button
-        onClick={handleDelete}
-        className="shrink-0 p-1 text-white/30 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-        title="프로젝트 삭제"
-      >
-        <Trash2 className="h-3 w-3" />
+        <LayoutGrid className="h-3 w-3 shrink-0" />
+        Assets
       </button>
     </div>
   )
@@ -402,6 +420,7 @@ export default function LibraryPage() {
 
   const activeFilter = (searchParams.get('type') as MediaFilter) || 'all'
   const search = searchParams.get('search') || ''
+  const activeProjectId = searchParams.get('projectId') || null
 
   React.useEffect(() => {
     setLocalSearch(search)
@@ -471,6 +490,9 @@ export default function LibraryPage() {
       if (search) {
         params.set('search', search)
       }
+      if (activeProjectId) {
+        params.set('project_id', activeProjectId)
+      }
       if (cursor && cursorId) {
         params.set('cursor', cursor)
         params.set('cursor_id', cursorId)
@@ -526,7 +548,7 @@ export default function LibraryPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [activeFilter, search])
+  }, [activeFilter, search, activeProjectId])
 
   // 초기 로드 및 필터/검색 변경 시 fresh fetch
   React.useEffect(() => {
@@ -549,7 +571,11 @@ export default function LibraryPage() {
   }
 
   const handleFilterChange = (filter: MediaFilter) => {
-    updateUrl({ type: filter === 'all' ? null : filter })
+    updateUrl({ type: filter === 'all' ? null : filter, projectId: null })
+  }
+
+  const handleProjectSelect = (projectId: string | null) => {
+    updateUrl({ projectId })
   }
 
   const handleSearchChange = (value: string) => {
@@ -666,13 +692,19 @@ export default function LibraryPage() {
         isLoadingProjects={isLoadingProjects}
         onRenameProject={handleRenameProject}
         onDeleteProject={handleDeleteProject}
+        activeProjectId={activeProjectId}
+        onProjectSelect={handleProjectSelect}
       />
 
       {/* Main Content */}
       <div className="flex-1 min-w-0">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">{filterLabels[activeFilter]}</h1>
+          <h1 className="text-2xl font-bold text-white">
+            {activeProjectId
+              ? `"${projects.find(p => p.id === activeProjectId)?.title ?? 'Project'}" 에셋`
+              : filterLabels[activeFilter]}
+          </h1>
           <p className="text-sm text-white/50">
             {totalCount} {totalCount === 1 ? 'item' : 'items'}
           </p>

@@ -105,6 +105,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<LibraryRes
     const searchParams = request.nextUrl.searchParams
     const mediaType = searchParams.get('type') as 'image' | 'video' | 'tts' | 'bgm' | 'liked' | null
     const search = searchParams.get('search')
+    const projectId = searchParams.get('project_id')
     const limit = parseInt(searchParams.get('limit') || '100', 10)
     const cursor = searchParams.get('cursor')
     const cursorId = searchParams.get('cursor_id')
@@ -125,6 +126,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<LibraryRes
       itemsQuery = itemsQuery.or(`created_at.lt.${cursor},and(created_at.eq.${cursor},id.lt.${cursorId})`)
     }
 
+    if (projectId) {
+      itemsQuery = itemsQuery.eq('project_id', projectId)
+    }
+
     if (mediaType === 'liked') {
       itemsQuery = itemsQuery.eq('is_favorite', true)
     } else if (mediaType) {
@@ -143,6 +148,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<LibraryRes
       .eq('status', 'completed')
       .not('output_url', 'is', null)
 
+    if (projectId) {
+      totalCountQuery = totalCountQuery.eq('project_id', projectId)
+    }
     if (mediaType === 'liked') {
       totalCountQuery = totalCountQuery.eq('is_favorite', true)
     } else if (mediaType) {
@@ -152,13 +160,17 @@ export async function GET(request: NextRequest): Promise<NextResponse<LibraryRes
       totalCountQuery = totalCountQuery.ilike('prompt', `%${search}%`)
     }
 
-    // Build sidebar counts query (unfiltered)
-    const countsQuery = supabase
+    // Build sidebar counts query (scoped to project if filtered)
+    let countsQuery = supabase
       .from('media_generations')
       .select('media_type, is_favorite')
       .eq('user_id', user.id)
       .eq('status', 'completed')
       .not('output_url', 'is', null)
+
+    if (projectId) {
+      countsQuery = countsQuery.eq('project_id', projectId)
+    }
 
     // Run all queries in parallel
     const [itemsResult, totalCountResult, countsResult] = await Promise.all([

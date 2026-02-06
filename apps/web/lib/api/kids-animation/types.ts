@@ -198,6 +198,14 @@ export const FinalRequestSchema = z.object({
   bgmUrl: z.string().min(1), // URL or path
   style: z.enum(['pixar', 'disney', 'dreamworks']).default('pixar'),
   songVersion: z.boolean().optional(),
+  // 썸네일 개선용 (optional)
+  storyTitle: z.string().max(200).optional(),
+  storyLogline: z.string().max(500).optional(),
+  characters: z.array(z.object({
+    name: z.string(),
+    visualDescription: z.string(),
+  })).optional(),
+  anchorUrls: z.array(z.string().url()).max(10).optional(),
 })
 export type FinalRequest = z.infer<typeof FinalRequestSchema>
 
