@@ -46,12 +46,6 @@ export const TEMPLATES: Template[] = [
                 ],
                 default: 'longform',
               },
-              {
-                id: 'songVersion',
-                type: 'toggle',
-                label: '노래 버전 생성',
-                default: false,
-              },
             ],
           },
         },
@@ -196,7 +190,6 @@ export const TEMPLATES: Template[] = [
             subSteps: [
               { id: 'merge', label: '영상 합성' },
               { id: 'thumbnail', label: '썸네일 생성' },
-              { id: 'song', label: '노래 버전', conditional: 'songVersion' },
             ],
             previewType: 'video-player',
             downloadable: true,

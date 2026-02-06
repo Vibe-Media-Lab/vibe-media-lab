@@ -262,7 +262,7 @@ export async function generateThumbnail(
     })
 
     const baseOpts = {
-      aspectRatio: '16:9' as const,
+      aspectRatio: params.aspectRatio || ('16:9' as const),
       resolution: '2K' as const,
       userId: params.userId,
       sessionId: params.sessionId,

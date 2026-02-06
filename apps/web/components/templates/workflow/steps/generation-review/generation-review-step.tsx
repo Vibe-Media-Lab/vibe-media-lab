@@ -22,6 +22,16 @@ import { ProgressDisplay } from './progress-display'
 import { GeneratingPreview } from './generating-preview'
 import { Preview } from './preview'
 
+// API 에러 응답에서 메시지 추출
+function extractErrorMessage(errorData: Record<string, unknown>, fallback: string): string {
+  const error = errorData.error
+  if (typeof error === 'string') return error
+  if (error && typeof error === 'object' && 'message' in error) {
+    return (error as { message: string }).message
+  }
+  return fallback
+}
+
 // 실제로 유효한 데이터가 있는지 확인
 function hasValidGeneratedData(val: unknown, previewType: string): boolean {
   if (!val) return false
@@ -370,7 +380,6 @@ export function GenerationReviewStep({
           shots: mergedShots,
           bgmUrl,
           style: baseRequest.style,
-          songVersion: false,
           // 썸네일용 추가 데이터
           storyTitle: storyObj?.title,
           storyLogline: storyObj?.logline || storyObj?.synopsis,
@@ -437,7 +446,7 @@ export function GenerationReviewStep({
 
       if (!charResponse.ok) {
         const errorData = await charResponse.json().catch(() => ({}))
-        throw new Error(errorData.error || `캐릭터 확장 실패: ${charResponse.status}`)
+        throw new Error(extractErrorMessage(errorData, `캐릭터 확장 실패: ${charResponse.status}`))
       }
 
       const charResult = await charResponse.json()
@@ -469,7 +478,7 @@ export function GenerationReviewStep({
 
       if (!bgResponse.ok) {
         const errorData = await bgResponse.json().catch(() => ({}))
-        throw new Error(errorData.error || `배경 확장 실패: ${bgResponse.status}`)
+        throw new Error(extractErrorMessage(errorData, `배경 확장 실패: ${bgResponse.status}`))
       }
 
       const bgResult = await bgResponse.json()
@@ -549,7 +558,8 @@ export function GenerationReviewStep({
           videoUrl = result.data?.videoUrl || ''
         } else {
           const errorData = await response.json().catch(() => ({}))
-          console.error(`[Video] Shot ${i + 1} API 에러:`, errorData.error || response.status)
+          const errorMsg = extractErrorMessage(errorData, `HTTP ${response.status}`)
+          console.error(`[Video] Shot ${i + 1} API 에러:`, errorMsg)
         }
       } catch (fetchError) {
         console.error(`[Video] Shot ${i + 1} 네트워크 에러:`, fetchError)
@@ -734,7 +744,7 @@ export function GenerationReviewStep({
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.error || `API 오류: ${response.status}`)
+          throw new Error(extractErrorMessage(errorData, `API 오류: ${response.status}`))
         }
 
         const result = await response.json()
@@ -888,7 +898,7 @@ export function GenerationReviewStep({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `비디오 재생성 실패: ${response.status}`)
+        throw new Error(extractErrorMessage(errorData, `비디오 재생성 실패: ${response.status}`))
       }
 
       const result = await response.json()

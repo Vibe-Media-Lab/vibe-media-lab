@@ -333,7 +333,6 @@ export interface KidsProjectSetup {
   topic: string
   formFactor: KidsFormFactor
   style: KidsAnimationStyle
-  songVersion: boolean
   thumbnailStyle: KidsThumbnailStyle
 }
 
@@ -547,6 +546,5 @@ export interface KidsPipelineState {
   shots?: KidsShot[]
   finalVideoUrl?: string
   thumbnailUrl?: string
-  songVideoUrl?: string
   progress: GenerationProgress
 }

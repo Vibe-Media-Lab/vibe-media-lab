@@ -196,8 +196,8 @@ export const FinalRequestSchema = z.object({
     audioUrl: z.string().min(1), // URL or path
   })).min(1).max(100), // At least 1, max 100 shots
   bgmUrl: z.string().min(1), // URL or path
+  formFactor: z.enum(['longform', 'shortform']).default('longform'),
   style: z.enum(['pixar', 'disney', 'dreamworks']).default('pixar'),
-  songVersion: z.boolean().optional(),
   // 썸네일 개선용 (optional)
   storyTitle: z.string().max(200).optional(),
   storyLogline: z.string().max(500).optional(),
@@ -272,7 +272,6 @@ export interface FinalResponse {
   sessionId: string
   videoUrl: string
   thumbnailUrl: string
-  songVideoUrl?: string
   totalDuration: number
 }
 

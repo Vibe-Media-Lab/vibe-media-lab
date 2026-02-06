@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       imageUrl: shot.imageUrl,
       prompt: shot.visualPrompt,
       duration: (shot.duration === 10 ? '10' : '5') as '5' | '10',
+      aspectRatio: formFactorPreset.video.aspectRatio,
     })
 
     const videoUrl = result.url || ''

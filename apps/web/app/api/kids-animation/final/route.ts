@@ -1,3 +1,4 @@
+import { KIDS_FORM_FACTOR_PRESETS } from '@vibe-media-lab/shared'
 import { createApiHandler } from '@/lib/api'
 import {
   FinalRequestSchema,
@@ -23,15 +24,15 @@ const logger = getLogger('api/kids-animation/final')
  * 1. FFmpeg로 BGM 전처리 (시작부 + 크로스페이드 + 끝부분 = 목표 길이)
  * 2. fal.ai FFmpeg로 비디오 클립 + TTS + 편집된 BGM 합성
  * 3. nanobanana로 썸네일 생성
- * 4. (선택) 노래 버전 생성 - 추후 구현
  */
 export const POST = createApiHandler<FinalResponse>(
   async (request, { user, requestId }) => {
     const body = await request.json()
     const validated = FinalRequestSchema.parse(body)
 
-    const { sessionId, projectId, shots, bgmUrl, style, songVersion,
+    const { sessionId, projectId, shots, bgmUrl, formFactor = 'longform', style,
             storyTitle, storyLogline, characters, anchorUrls } = validated
+    const formFactorPreset = KIDS_FORM_FACTOR_PRESETS[formFactor]
 
     // 총 예상 영상 길이 계산
     const expectedDurationSec = shots.reduce((sum, s) => sum + s.duration, 0)
@@ -145,6 +146,7 @@ export const POST = createApiHandler<FinalResponse>(
     const thumbnailResult = await generateThumbnail({
       title: storyTitle || `Kids Animation - ${style.charAt(0).toUpperCase() + style.slice(1)} Style`,
       style,
+      aspectRatio: formFactorPreset.aspectRatio,
       logline: storyLogline,
       characters: characters?.map(c => ({
         name: c.name,
@@ -157,10 +159,11 @@ export const POST = createApiHandler<FinalResponse>(
     })
 
     // Thumbnail is non-critical - use fallback if generation fails
+    const fallbackSize = formFactor === 'shortform' ? '720/1280' : '1280/720'
     const thumbnailUrl =
       thumbnailResult.success && thumbnailResult.url
         ? thumbnailResult.url
-        : `https://picsum.photos/seed/${sessionId}/1280/720`
+        : `https://picsum.photos/seed/${sessionId}/${fallbackSize}`
 
     if (!thumbnailResult.success) {
       logger.warn('Thumbnail generation failed, using fallback', {
@@ -176,14 +179,6 @@ export const POST = createApiHandler<FinalResponse>(
       videoUrl: composeResult.videoUrl || '',
       thumbnailUrl,
       totalDuration: expectedDurationSec,
-    }
-
-    // 5. Song version (TODO: implement later)
-    if (songVersion) {
-      logger.info('Song version requested but not yet implemented', {
-        requestId,
-        sessionId,
-      })
     }
 
     logger.info('Final composition completed', {

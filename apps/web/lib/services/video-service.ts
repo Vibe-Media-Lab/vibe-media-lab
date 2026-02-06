@@ -43,6 +43,7 @@ export async function imageToVideo(
       prompt: params.prompt,
       image_urls: [params.imageUrl],
       duration: params.duration || '5',
+      aspect_ratio: params.aspectRatio || '16:9',
       sound: params.sound ?? false,
     }
 
@@ -121,7 +122,7 @@ async function mockImageToVideo(
 
   return {
     success: true,
-    url: '', // No mock video URL
+    url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
     metadata: {
       prompt: params.prompt,
       duration: params.duration || '5',
@@ -190,7 +191,7 @@ async function mockTextToVideo(
 
   return {
     success: true,
-    url: '', // No mock video URL
+    url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
     metadata: {
       prompt: params.prompt,
       duration: params.duration || '5',

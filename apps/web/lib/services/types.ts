@@ -80,6 +80,7 @@ export interface ImageToVideoParams extends LibrarySaveOptions {
   imageUrl: string
   prompt: string
   duration?: VideoDuration
+  aspectRatio?: '1:1' | '9:16' | '16:9'
   sound?: boolean
   tailImageUrl?: string
 }
@@ -255,6 +256,7 @@ export interface ComposeVideoResult {
 export interface ThumbnailGenerateParams extends LibrarySaveOptions {
   title: string
   style: string
+  aspectRatio?: AspectRatio
   logline?: string
   characters?: Array<{ name: string; visualDescription: string }>
   referenceUrls?: string[]
