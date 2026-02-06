@@ -3,10 +3,11 @@
 import * as React from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Heart, Search, LayoutGrid, ImageIcon, VideoIcon, Mic, Sparkles, ChevronRight, ChevronDown, Plus, FolderOpen, Clock, CheckCircle, Pencil, Check, X } from 'lucide-react'
+import { Heart, Search, LayoutGrid, ImageIcon, VideoIcon, AudioLines, Music, ChevronRight, ChevronDown, Plus, FolderOpen, Clock, CheckCircle, Pencil, Check, X, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
-import { AssetCard, type AssetItem } from '@/components/library/asset-card'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { AssetCard, AudioAssetCard, type AssetItem } from '@/components/library/asset-card'
 
 interface LibraryGroup {
   date: string
@@ -20,15 +21,16 @@ interface MediaCounts {
   video: number
 }
 
-type MediaFilter = 'all' | 'liked' | 'image' | 'video' | 'lipsync' | 'upscaled'
+type MediaFilter = 'all' | 'liked' | 'image' | 'video' | 'tts' | 'bgm'
 
 interface LibraryData {
   groups: LibraryGroup[]
   counts: MediaCounts
   pagination: {
-    page: number
     total: number
     hasMore: boolean
+    nextCursor: string | null
+    nextCursorId: string | null
   }
 }
 
@@ -42,10 +44,10 @@ interface Project {
   updatedAt: string
 }
 
-type ToolFilter = 'all' | 'liked' | 'image' | 'video' | 'lipsync' | 'upscaled'
+type ToolFilter = 'all' | 'liked' | 'image' | 'video' | 'tts' | 'bgm'
 
 interface SidebarProps {
-  counts: MediaCounts & { liked?: number; lipsync?: number; upscaled?: number }
+  counts: MediaCounts & { liked?: number; tts?: number; bgm?: number }
   activeFilter: ToolFilter
   onFilterChange: (filter: ToolFilter) => void
   searchValue: string
@@ -53,6 +55,7 @@ interface SidebarProps {
   projects: Project[]
   isLoadingProjects: boolean
   onRenameProject: (id: string, title: string) => Promise<void>
+  onDeleteProject: (id: string) => void
 }
 
 function Sidebar({
@@ -64,6 +67,7 @@ function Sidebar({
   projects,
   isLoadingProjects,
   onRenameProject,
+  onDeleteProject,
 }: SidebarProps) {
   const [personalExpanded, setPersonalExpanded] = React.useState(true)
 
@@ -124,26 +128,26 @@ function Sidebar({
           indent
         />
         <SidebarItem
-          icon={Mic}
-          label="Lipsync"
-          count={counts.lipsync ?? 0}
-          active={activeFilter === 'lipsync'}
-          onClick={() => onFilterChange('lipsync')}
+          icon={AudioLines}
+          label="TTS"
+          count={counts.tts ?? 0}
+          active={activeFilter === 'tts'}
+          onClick={() => onFilterChange('tts')}
           indent
         />
         <SidebarItem
-          icon={Sparkles}
-          label="Upscaled"
-          count={counts.upscaled ?? 0}
-          active={activeFilter === 'upscaled'}
-          onClick={() => onFilterChange('upscaled')}
+          icon={Music}
+          label="BGM"
+          count={counts.bgm ?? 0}
+          active={activeFilter === 'bgm'}
+          onClick={() => onFilterChange('bgm')}
           indent
         />
       </div>
 
       {/* Shared with me */}
       <div className="space-y-0.5">
-        <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/50 hover:text-white/80 transition-colors">
+        <button className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/50 hover:text-white/80 transition-colors cursor-pointer">
           <ChevronRight className="h-4 w-4" />
           <span>Shared with me</span>
         </button>
@@ -153,7 +157,7 @@ function Sidebar({
       <div className="space-y-0.5">
         <button
           onClick={() => setPersonalExpanded(!personalExpanded)}
-          className="flex w-full items-center justify-between px-3 py-2 text-sm text-white/50 hover:text-white/80 transition-colors group"
+          className="flex w-full items-center justify-between px-3 py-2 text-sm text-white/50 hover:text-white/80 transition-colors cursor-pointer group"
         >
           <span className="flex items-center gap-2">
             <ChevronDown className={cn('h-4 w-4 transition-transform', !personalExpanded && '-rotate-90')} />
@@ -178,7 +182,7 @@ function Sidebar({
                       In Progress
                     </div>
                     {inProgressProjects.map((project) => (
-                      <ProjectItem key={project.id} project={project} onRename={onRenameProject} />
+                      <ProjectItem key={project.id} project={project} onRename={onRenameProject} onDelete={onDeleteProject} />
                     ))}
                   </div>
                 )}
@@ -191,7 +195,7 @@ function Sidebar({
                       Completed
                     </div>
                     {completedProjects.map((project) => (
-                      <ProjectItem key={project.id} project={project} onRename={onRenameProject} />
+                      <ProjectItem key={project.id} project={project} onRename={onRenameProject} onDelete={onDeleteProject} />
                     ))}
                   </div>
                 )}
@@ -203,7 +207,7 @@ function Sidebar({
 
       {/* Team projects */}
       <div className="space-y-0.5">
-        <button className="flex w-full items-center justify-between px-3 py-2 text-sm text-white/50 hover:text-white/80 transition-colors">
+        <button className="flex w-full items-center justify-between px-3 py-2 text-sm text-white/50 hover:text-white/80 transition-colors cursor-pointer">
           <span className="flex items-center gap-2">
             <ChevronRight className="h-4 w-4" />
             <span>Team projects</span>
@@ -215,7 +219,7 @@ function Sidebar({
   )
 }
 
-function ProjectItem({ project, onRename }: { project: Project; onRename: (id: string, title: string) => Promise<void> }) {
+function ProjectItem({ project, onRename, onDelete }: { project: Project; onRename: (id: string, title: string) => Promise<void>; onDelete: (id: string) => void }) {
   const isInProgress = project.status === 'in_progress'
   const [isEditing, setIsEditing] = React.useState(false)
   const [editTitle, setEditTitle] = React.useState(project.title)
@@ -276,14 +280,14 @@ function ProjectItem({ project, onRename }: { project: Project; onRename: (id: s
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="p-0.5 text-green-400 hover:text-green-300"
+          className="p-0.5 text-green-400 hover:text-green-300 cursor-pointer"
         >
           <Check className="h-3 w-3" />
         </button>
         <button
           onClick={handleCancel}
           disabled={isSaving}
-          className="p-0.5 text-red-400 hover:text-red-300"
+          className="p-0.5 text-red-400 hover:text-red-300 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>
@@ -291,12 +295,16 @@ function ProjectItem({ project, onRename }: { project: Project; onRename: (id: s
     )
   }
 
+  const handleDelete = () => {
+    onDelete(project.id)
+  }
+
   return (
-    <div className="group flex items-center gap-1">
+    <div className="group flex items-center gap-1 min-w-0">
       <Link
         href={`/templates/${project.templateId}/workflow?projectId=${project.id}`}
         className={cn(
-          'flex-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+          'flex-1 min-w-0 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
           'text-white/60 hover:bg-white/5 hover:text-white/80'
         )}
       >
@@ -311,10 +319,17 @@ function ProjectItem({ project, onRename }: { project: Project; onRename: (id: s
           e.preventDefault()
           setIsEditing(true)
         }}
-        className="p-1 text-white/30 hover:text-white/60 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="shrink-0 p-1 text-white/30 hover:text-white/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
         title="이름 변경"
       >
         <Pencil className="h-3 w-3" />
+      </button>
+      <button
+        onClick={handleDelete}
+        className="shrink-0 p-1 text-white/30 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+        title="프로젝트 삭제"
+      >
+        <Trash2 className="h-3 w-3" />
       </button>
     </div>
   )
@@ -339,7 +354,7 @@ function SidebarItem({
     <button
       onClick={onClick}
       className={cn(
-        'flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors',
+        'flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors cursor-pointer',
         indent && 'pl-6',
         active
           ? 'bg-white/10 text-white'
@@ -369,26 +384,28 @@ export default function LibraryPage() {
   const [error, setError] = React.useState<string | null>(null)
   const [localSearch, setLocalSearch] = React.useState('')
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const prevPageRef = React.useRef(1)
-  const isFirstLoadRef = React.useRef(true)
 
   // Projects state
   const [projects, setProjects] = React.useState<Project[]>([])
   const [isLoadingProjects, setIsLoadingProjects] = React.useState(true)
 
+  // Delete confirm dialog state
+  const [deleteDialog, setDeleteDialog] = React.useState<{
+    open: boolean
+    type: 'project' | 'asset'
+    id: string
+    title: string
+    description: string
+    hasProject?: boolean
+  }>({ open: false, type: 'asset', id: '', title: '', description: '' })
+  const [isDeleting, setIsDeleting] = React.useState(false)
+
   const activeFilter = (searchParams.get('type') as MediaFilter) || 'all'
   const search = searchParams.get('search') || ''
-  const page = parseInt(searchParams.get('page') || '1', 10)
 
   React.useEffect(() => {
     setLocalSearch(search)
   }, [search])
-
-  // 필터나 검색 변경 시 refs 리셋
-  React.useEffect(() => {
-    prevPageRef.current = 1
-    isFirstLoadRef.current = true
-  }, [activeFilter, search])
 
   // Fetch projects
   React.useEffect(() => {
@@ -411,6 +428,18 @@ export default function LibraryPage() {
     fetchProjects()
   }, [])
 
+  // Delete project - 다이얼로그 열기
+  const handleDeleteProject = React.useCallback((projectId: string) => {
+    const project = projects.find((p) => p.id === projectId)
+    setDeleteDialog({
+      open: true,
+      type: 'project',
+      id: projectId,
+      title: '프로젝트 삭제',
+      description: `"${project?.title || '프로젝트'}"를 삭제하시겠습니까? 연결된 에셋도 함께 삭제됩니다.`,
+    })
+  }, [projects])
+
   // Rename project
   const handleRenameProject = React.useCallback(async (projectId: string, newTitle: string) => {
     const response = await fetch(`/api/projects/${projectId}`, {
@@ -429,9 +458,10 @@ export default function LibraryPage() {
     )
   }, [])
 
-  const fetchData = React.useCallback(async (isLoadMore = false) => {
+  const fetchData = React.useCallback(async (cursor?: string | null, cursorId?: string | null) => {
+    const isLoadMore = !!cursor
     setIsLoading(true)
-    setError(null)
+    if (!isLoadMore) setError(null)
 
     try {
       const params = new URLSearchParams()
@@ -441,7 +471,10 @@ export default function LibraryPage() {
       if (search) {
         params.set('search', search)
       }
-      params.set('page', String(page))
+      if (cursor && cursorId) {
+        params.set('cursor', cursor)
+        params.set('cursor_id', cursorId)
+      }
 
       const response = await fetch(`/api/library?${params.toString()}`)
       const result = await response.json()
@@ -493,16 +526,12 @@ export default function LibraryPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [activeFilter, search, page])
+  }, [activeFilter, search])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // 초기 로드 및 필터/검색 변경 시 fresh fetch
   React.useEffect(() => {
-    // 첫 로드 시에는 항상 새로 로드, 이후 page 증가 시에만 Load More
-    const shouldLoadMore = !isFirstLoadRef.current && page > prevPageRef.current
-    fetchData(shouldLoadMore)
-    prevPageRef.current = page
-    isFirstLoadRef.current = false
-  }, [activeFilter, search, page])
+    fetchData()
+  }, [fetchData])
 
   const updateUrl = (updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -513,10 +542,6 @@ export default function LibraryPage() {
       } else {
         params.set(key, value)
       }
-    }
-
-    if ('type' in updates || 'search' in updates) {
-      params.delete('page')
     }
 
     const queryString = params.toString()
@@ -555,26 +580,55 @@ export default function LibraryPage() {
           })),
         })
       }
-    } catch {}
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this asset?')) return
-
-    try {
-      const response = await fetch(`/api/library/${id}`, { method: 'DELETE' })
-      const result = await response.json()
-      if (result.success) fetchData()
-    } catch {}
-  }
-
-  const handleLoadMore = () => {
-    if (data?.pagination.hasMore) {
-      updateUrl({ page: String(page + 1) })
+    } catch {
+      // silently fail - UI state already updated optimistically
     }
   }
 
-  const counts = data?.counts || { all: 0, image: 0, video: 0, liked: 0, lipsync: 0, upscaled: 0 }
+  const handleDelete = (id: string, hasProject: boolean) => {
+    setDeleteDialog({
+      open: true,
+      type: 'asset',
+      id,
+      hasProject,
+      title: hasProject ? '프로젝트 연결 에셋 삭제' : '에셋 삭제',
+      description: hasProject
+        ? '이 에셋은 프로젝트에 연결되어 있습니다. 삭제하면 해당 프로젝트에서도 사라집니다.'
+        : '이 에셋을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.',
+    })
+  }
+
+  const executeDelete = async () => {
+    setIsDeleting(true)
+    try {
+      if (deleteDialog.type === 'project') {
+        const response = await fetch(`/api/projects/${deleteDialog.id}`, {
+          method: 'DELETE',
+        })
+        if (response.ok) {
+          setProjects((prev) => prev.filter((p) => p.id !== deleteDialog.id))
+          fetchData()
+        }
+      } else {
+        const response = await fetch(`/api/library/${deleteDialog.id}`, { method: 'DELETE' })
+        const result = await response.json()
+        if (result.success) fetchData()
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setIsDeleting(false)
+      setDeleteDialog((prev) => ({ ...prev, open: false }))
+    }
+  }
+
+  const handleLoadMore = () => {
+    if (data?.pagination.hasMore && data.pagination.nextCursor && data.pagination.nextCursorId) {
+      fetchData(data.pagination.nextCursor, data.pagination.nextCursorId)
+    }
+  }
+
+  const counts = data?.counts || { all: 0, image: 0, video: 0, liked: 0, tts: 0, bgm: 0 }
   const totalCount = data?.pagination.total || 0
 
   const filterLabels: Record<MediaFilter, string> = {
@@ -582,12 +636,25 @@ export default function LibraryPage() {
     liked: 'Liked',
     image: 'Images',
     video: 'Videos',
-    lipsync: 'Lipsync',
-    upscaled: 'Upscaled',
+    tts: 'TTS',
+    bgm: 'BGM',
   }
 
   return (
     <div className="flex gap-8">
+      {/* Delete Confirm Dialog */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog((prev) => ({ ...prev, open }))}
+        title={deleteDialog.title}
+        description={deleteDialog.description}
+        confirmLabel="삭제"
+        cancelLabel="취소"
+        variant="destructive"
+        onConfirm={executeDelete}
+        isLoading={isDeleting}
+      />
+
       {/* Sidebar */}
       <Sidebar
         counts={counts}
@@ -598,6 +665,7 @@ export default function LibraryPage() {
         projects={projects}
         isLoadingProjects={isLoadingProjects}
         onRenameProject={handleRenameProject}
+        onDeleteProject={handleDeleteProject}
       />
 
       {/* Main Content */}
@@ -642,17 +710,46 @@ export default function LibraryPage() {
                 </div>
 
                 {/* Grid */}
-                <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 2xl:columns-6 gap-4 space-y-4">
-                  {group.items.map((asset) => (
-                    <div key={asset.id} className="break-inside-avoid">
-                      <AssetCard
-                        asset={asset}
-                        onFavoriteToggle={handleFavoriteToggle}
-                        onDelete={handleDelete}
-                      />
-                    </div>
-                  ))}
-                </div>
+                {(() => {
+                  const visualItems = group.items.filter(
+                    (a) => a.media_type !== 'tts' && a.media_type !== 'bgm'
+                  )
+                  const audioItems = group.items.filter(
+                    (a) => a.media_type === 'tts' || a.media_type === 'bgm'
+                  )
+                  return (
+                    <>
+                      {visualItems.length > 0 && (
+                        <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 2xl:columns-6 gap-4 space-y-4">
+                          {visualItems.map((asset) => (
+                            <div key={asset.id} className="break-inside-avoid">
+                              <AssetCard
+                                asset={asset}
+                                onFavoriteToggle={handleFavoriteToggle}
+                                onDelete={handleDelete}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {audioItems.length > 0 && (
+                        <div className={cn(
+                          'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3',
+                          visualItems.length > 0 && 'mt-4'
+                        )}>
+                          {audioItems.map((asset) => (
+                            <AudioAssetCard
+                              key={asset.id}
+                              asset={asset}
+                              onFavoriteToggle={handleFavoriteToggle}
+                              onDelete={handleDelete}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
               </section>
             ))}
 
@@ -661,7 +758,7 @@ export default function LibraryPage() {
                 <button
                   onClick={handleLoadMore}
                   disabled={isLoading}
-                  className="px-6 py-2 text-sm font-medium text-[var(--color-neon-pink)] hover:text-[var(--color-neon-pink)]/80 disabled:opacity-50"
+                  className="px-6 py-2 text-sm font-medium text-[var(--color-neon-pink)] hover:text-[var(--color-neon-pink)]/80 disabled:opacity-50 cursor-pointer"
                 >
                   {isLoading ? 'Loading...' : 'Load more'}
                 </button>

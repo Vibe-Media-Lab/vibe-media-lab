@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Image from 'next/image'
-import { Heart, Play, Pause, Trash2, Download, Music, Film, ImageIcon } from 'lucide-react'
+import { Heart, Play, Pause, Trash2, Download, Music, AudioLines, Film, ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface AssetItem {
@@ -16,12 +16,13 @@ export interface AssetItem {
   duration_seconds: number | null
   is_favorite: boolean
   created_at: string
+  project_id: string | null
 }
 
 interface AssetCardProps {
   asset: AssetItem
   onFavoriteToggle?: (id: string) => void
-  onDelete?: (id: string) => void
+  onDelete?: (id: string, hasProject: boolean) => void
 }
 
 export function AssetCard({ asset, onFavoriteToggle, onDelete }: AssetCardProps) {
@@ -78,7 +79,7 @@ export function AssetCard({ asset, onFavoriteToggle, onDelete }: AssetCardProps)
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    onDelete?.(asset.id)
+    onDelete?.(asset.id, asset.project_id != null)
   }
 
   const handleDownload = (e: React.MouseEvent) => {
@@ -443,6 +444,191 @@ export function AssetCard({ asset, onFavoriteToggle, onDelete }: AssetCardProps)
             </div>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 오디오 에셋 전용 가로형 카드
+ */
+export function AudioAssetCard({ asset, onFavoriteToggle, onDelete }: AssetCardProps) {
+  const audioRef = React.useRef<HTMLAudioElement>(null)
+  const [isPlaying, setIsPlaying] = React.useState(false)
+  const [currentTime, setCurrentTime] = React.useState(0)
+  const [duration, setDuration] = React.useState(0)
+
+  const isBgm = asset.media_type === 'bgm'
+
+  const handlePlayPause = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!audioRef.current) return
+    if (isPlaying) {
+      audioRef.current.pause()
+    } else {
+      audioRef.current.play().catch(() => {})
+    }
+  }
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!audioRef.current || !duration) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    audioRef.current.currentTime = (x / rect.width) * duration
+  }
+
+  const handleFavoriteClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onFavoriteToggle?.(asset.id)
+  }
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onDelete?.(asset.id, asset.project_id != null)
+  }
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!asset.output_url) return
+    const link = document.createElement('a')
+    link.href = asset.output_url
+    link.download = `vibe-${asset.media_type}-${Date.now()}.mp3`
+    link.click()
+  }
+
+  React.useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime)
+    const onLoadedMetadata = () => setDuration(audio.duration)
+    const onPlay = () => setIsPlaying(true)
+    const onPause = () => setIsPlaying(false)
+    const onEnded = () => {
+      setIsPlaying(false)
+      setCurrentTime(0)
+    }
+
+    audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('loadedmetadata', onLoadedMetadata)
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
+    audio.addEventListener('ended', onEnded)
+
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata)
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
+      audio.removeEventListener('ended', onEnded)
+    }
+  }, [])
+
+  const Icon = isBgm ? Music : AudioLines
+  const accentFrom = isBgm ? 'from-cyan-500/20' : 'from-violet-500/20'
+  const accentTo = isBgm ? 'to-blue-500/20' : 'to-purple-500/20'
+  const iconBg = isBgm ? 'bg-cyan-500/20' : 'bg-violet-500/20'
+  const iconColor = isBgm ? 'text-cyan-400' : 'text-violet-400'
+  const barColor = isBgm ? 'bg-cyan-400' : 'bg-violet-400'
+  const badgeColor = isBgm ? 'bg-cyan-500/20 text-cyan-300' : 'bg-violet-500/20 text-violet-300'
+
+  return (
+    <div className={cn(
+      'group relative flex items-center gap-4 rounded-lg p-3',
+      `bg-gradient-to-r ${accentFrom} ${accentTo}`,
+      'ring-1 ring-white/10 transition-all duration-200',
+      'hover:ring-2 hover:ring-primary/50 hover:shadow-lg'
+    )}>
+      {/* Hidden audio element */}
+      {asset.output_url && (
+        <audio ref={audioRef} src={asset.output_url} preload="metadata" />
+      )}
+
+      {/* Play button + Icon */}
+      <button
+        onClick={handlePlayPause}
+        className={cn(
+          'flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition-colors cursor-pointer',
+          iconBg,
+          'hover:bg-white/20'
+        )}
+      >
+        {isPlaying ? (
+          <Pause className="h-5 w-5 text-white fill-white" />
+        ) : (
+          <Play className="h-5 w-5 text-white fill-white ml-0.5" />
+        )}
+      </button>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0 space-y-1.5">
+        {/* Top: badge + prompt */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase', badgeColor)}>
+            {isBgm ? 'BGM' : 'TTS'}
+          </span>
+          <p className="truncate text-sm text-white/80">{asset.prompt}</p>
+        </div>
+
+        {/* Progress bar */}
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-[11px] tabular-nums text-white/50 w-9 text-right">
+            {formatDuration(currentTime)}
+          </span>
+          <div
+            className="flex-1 h-1 bg-white/10 rounded-full cursor-pointer"
+            onClick={handleSeek}
+          >
+            <div
+              className={cn('h-full rounded-full transition-all', barColor)}
+              style={{
+                width: duration ? `${(currentTime / duration) * 100}%` : '0%',
+              }}
+            />
+          </div>
+          <span className="shrink-0 text-[11px] tabular-nums text-white/50 w-9">
+            {formatDuration(duration || asset.duration_seconds || 0)}
+          </span>
+        </div>
+      </div>
+
+      {/* Type icon decoration */}
+      <Icon className={cn('h-5 w-5 shrink-0', iconColor, 'opacity-40')} />
+
+      {/* Action buttons */}
+      <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={handleDownload}
+          className="rounded-full bg-black/30 p-1.5 text-white hover:bg-[var(--color-neon-pink)] transition-colors cursor-pointer"
+          title="다운로드"
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={handleFavoriteClick}
+          className={cn(
+            'rounded-full p-1.5 transition-colors cursor-pointer',
+            asset.is_favorite
+              ? 'bg-red-500 text-white'
+              : 'bg-black/30 text-white hover:bg-black/50'
+          )}
+          title="좋아요"
+        >
+          <Heart className={cn('h-3.5 w-3.5', asset.is_favorite && 'fill-current')} />
+        </button>
+        <button
+          onClick={handleDeleteClick}
+          className="rounded-full bg-black/30 p-1.5 text-white hover:bg-red-500 transition-colors cursor-pointer"
+          title="삭제"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
   )

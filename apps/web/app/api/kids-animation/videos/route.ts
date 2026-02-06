@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const validated = VideoRequestSchema.parse(body)
 
-    const { sessionId, shot, formFactor = 'longform' } = validated
+    const { sessionId, projectId, shot, formFactor = 'longform' } = validated
     const formFactorPreset = KIDS_FORM_FACTOR_PRESETS[formFactor]
     const userId = user.id
 
@@ -62,6 +62,7 @@ export async function POST(request: Request) {
     if (videoUrl && userId) {
       await saveToLibrary({
         userId,
+        projectId,
         mediaType: 'video',
         prompt: shot.visualPrompt,
         outputUrl: videoUrl,

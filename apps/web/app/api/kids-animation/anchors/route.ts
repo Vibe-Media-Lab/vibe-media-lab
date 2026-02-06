@@ -33,7 +33,7 @@ export const POST = createApiHandler<AnchorsResponse>(
       promptCount: validated.anchorPrompts?.length,
     })
 
-    const { sessionId, anchorPrompts, formFactor = 'longform', style } = validated
+    const { sessionId, projectId, anchorPrompts, formFactor = 'longform', style } = validated
     const styleConfig = KIDS_ANIMATION_STYLES[style]
     const formFactorPreset = KIDS_FORM_FACTOR_PRESETS[formFactor]
 
@@ -63,6 +63,7 @@ export const POST = createApiHandler<AnchorsResponse>(
         aspectRatio,
         resolution,
         userId: user.id,
+        projectId,
         sessionId,
         metadata: {
           anchorId: anchorPrompt.id,

@@ -24,6 +24,7 @@ interface WorkflowStepProps {
   value: unknown
   onChange: (value: unknown) => void
   inputContext?: Record<string, unknown>
+  projectId?: string | null
 }
 
 export function WorkflowStep({
@@ -31,6 +32,7 @@ export function WorkflowStep({
   value,
   onChange,
   inputContext,
+  projectId,
 }: WorkflowStepProps) {
   switch (step.type) {
     case 'text-input':
@@ -104,6 +106,7 @@ export function WorkflowStep({
           value={value as { data: unknown; generatedAt: Date } | null}
           onChange={onChange}
           inputContext={inputContext}
+          projectId={projectId}
         />
       )
 
@@ -123,6 +126,7 @@ export function WorkflowStep({
           }
           onChange={onChange}
           inputContext={inputContext}
+          projectId={projectId}
         />
       )
 

@@ -328,6 +328,7 @@ export function WorkflowContainer({ template }: WorkflowContainerProps) {
             value={stepData[currentStep.id]}
             onChange={handleStepDataChange}
             inputContext={stepData}
+            projectId={projectId}
           />
         )}
       </div>

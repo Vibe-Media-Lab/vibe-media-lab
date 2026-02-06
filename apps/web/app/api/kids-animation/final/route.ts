@@ -30,7 +30,7 @@ export const POST = createApiHandler<FinalResponse>(
     const body = await request.json()
     const validated = FinalRequestSchema.parse(body)
 
-    const { sessionId, shots, bgmUrl, style, songVersion } = validated
+    const { sessionId, projectId, shots, bgmUrl, style, songVersion } = validated
 
     // 총 예상 영상 길이 계산
     const expectedDurationSec = shots.reduce((sum, s) => sum + s.duration, 0)
@@ -107,6 +107,7 @@ export const POST = createApiHandler<FinalResponse>(
     // 2. Video Composition (편집된 BGM 사용)
     const composeResult = await composeVideo({
       sessionId,
+      projectId,
       shots: shots.map((shot) => ({
         id: shot.id,
         shotNumber: shot.shotNumber,
@@ -146,6 +147,7 @@ export const POST = createApiHandler<FinalResponse>(
       title: thumbnailTitle,
       style,
       userId: user?.id,
+      projectId,
       sessionId,
     })
 

@@ -276,6 +276,21 @@ export async function DELETE(
       )
     }
 
+    // 프로젝트에 연결된 에셋 먼저 삭제
+    const { error: assetsError } = await supabase
+      .from('media_generations')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+
+    if (assetsError) {
+      return NextResponse.json(
+        { success: false, error: assetsError.message },
+        { status: 500 }
+      )
+    }
+
+    // 프로젝트 삭제
     const { error } = await supabase
       .from('projects')
       .delete()

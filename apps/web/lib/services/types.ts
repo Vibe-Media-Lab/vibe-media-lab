@@ -11,6 +11,8 @@
 export interface LibrarySaveOptions {
   /** User ID - 제공하면 자동으로 Library에 저장 */
   userId?: string
+  /** Project ID - 프로젝트에 연결 */
+  projectId?: string
   /** Session ID for grouping */
   sessionId?: string
   /** Additional metadata */

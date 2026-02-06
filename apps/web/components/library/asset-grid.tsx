@@ -6,7 +6,7 @@ import { AssetCard, type AssetItem } from './asset-card'
 interface AssetGridProps {
   assets: AssetItem[]
   onFavoriteToggle?: (id: string) => void
-  onDelete?: (id: string) => void
+  onDelete?: (id: string, hasProject: boolean) => void
 }
 
 export function AssetGrid({ assets, onFavoriteToggle, onDelete }: AssetGridProps) {

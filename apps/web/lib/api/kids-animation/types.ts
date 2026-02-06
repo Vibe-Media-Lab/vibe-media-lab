@@ -94,6 +94,7 @@ export type ScriptRequest = z.infer<typeof ScriptRequestSchema>
 
 export const AnchorsRequestSchema = z.object({
   sessionId: z.string(),
+  projectId: z.string().optional(),
   anchorPrompts: z.array(z.object({
     id: z.string(),
     category: z.enum(['character', 'background']),
@@ -107,6 +108,7 @@ export type AnchorsRequest = z.infer<typeof AnchorsRequestSchema>
 
 export const ShotsRequestSchema = z.object({
   sessionId: z.string(),
+  projectId: z.string().optional(),
   script: z.object({
     shots: z.array(z.object({
       id: z.string(),
@@ -129,6 +131,7 @@ export type ShotsRequest = z.infer<typeof ShotsRequestSchema>
 // 단일 비디오 생성 요청 (클라이언트 순차 호출용)
 export const VideoRequestSchema = z.object({
   sessionId: z.string(),
+  projectId: z.string().optional(),
   shot: z.object({
     id: z.string(),
     shotNumber: z.number(),
@@ -156,6 +159,7 @@ export type VideosRequest = z.infer<typeof VideosRequestSchema>
 
 export const AudioRequestSchema = z.object({
   sessionId: z.string(),
+  projectId: z.string().optional(),
   shots: z.array(z.object({
     id: z.string(),
     shotNumber: z.number(),
@@ -183,6 +187,7 @@ export type AudioRequest = z.infer<typeof AudioRequestSchema>
 
 export const FinalRequestSchema = z.object({
   sessionId: z.string(),
+  projectId: z.string().optional(),
   shots: z.array(z.object({
     id: z.string(),
     shotNumber: z.number().int().positive(),

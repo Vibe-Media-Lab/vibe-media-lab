@@ -8,14 +8,14 @@ import type { Shot } from '../types'
 interface ShotGalleryPreviewProps {
   data: unknown
   onRegenerateItem?: (id: string) => void
-  onLikeItem?: (id: string) => void
+  onLikeItem?: (id: string, url: string) => void
   onDownloadItem?: (id: string, url: string) => void
 }
 
 export function ShotGalleryPreview({ data, onRegenerateItem, onLikeItem, onDownloadItem }: ShotGalleryPreviewProps) {
   const [likedItems, setLikedItems] = React.useState<Set<string>>(new Set())
 
-  const handleLike = (id: string) => {
+  const handleLike = (id: string, url: string) => {
     setLikedItems((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(id)) {
@@ -25,7 +25,7 @@ export function ShotGalleryPreview({ data, onRegenerateItem, onLikeItem, onDownl
       }
       return newSet
     })
-    onLikeItem?.(id)
+    onLikeItem?.(id, url)
   }
 
   const handleDownload = async (id: string, url: string) => {
@@ -93,7 +93,7 @@ export function ShotGalleryPreview({ data, onRegenerateItem, onLikeItem, onDownl
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleLike(shot.id)
+                        handleLike(shot.id, shot.imageUrl!)
                       }}
                       className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
                       title="좋아요"

@@ -66,6 +66,7 @@ export async function generateImage(
   if (result.success && result.url && params.userId) {
     const saveResult = await saveToLibrary({
       userId: params.userId,
+      projectId: params.projectId,
       mediaType: 'image',
       prompt: params.prompt,
       outputUrl: result.url,
@@ -227,6 +228,7 @@ export async function editImage(
   if (result.success && result.url && params.userId) {
     const saveResult = await saveToLibrary({
       userId: params.userId,
+      projectId: params.projectId,
       mediaType: 'image',
       prompt: params.prompt,
       outputUrl: result.url,
@@ -406,6 +408,7 @@ export async function batchEditImages(
       model: params.model,
       resolution: params.resolution,
       userId: params.userId,
+      projectId: params.projectId,
       sessionId: params.sessionId,
       metadata: { ...params.metadata, batchIndex: i },
     })

@@ -63,6 +63,7 @@ interface MediaChoiceStepProps {
   onChange: (value: MediaChoiceResult | null) => void
   onApprove?: () => void
   inputContext?: Record<string, unknown>
+  projectId?: string | null
 }
 
 // ============================================================
@@ -565,6 +566,7 @@ export function MediaChoiceStep({
   onChange,
   onApprove,
   inputContext,
+  projectId,
 }: MediaChoiceStepProps) {
   const [selectedMode, setSelectedMode] = React.useState<Mode | null>(
     value?.mode || config.modes.find((m) => m.default)?.id || null
@@ -682,6 +684,7 @@ export function MediaChoiceStep({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId,
+          projectId: projectId || undefined,
           anchorPrompts,
           formFactor,
           style,
@@ -776,6 +779,7 @@ export function MediaChoiceStep({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionId,
+          projectId: projectId || undefined,
           anchorPrompts: [targetPrompt],
           formFactor,
           style,

@@ -59,6 +59,7 @@ export async function composeVideo(
   if (result.success && result.videoUrl && params.userId) {
     const saveResult = await saveToLibrary({
       userId: params.userId,
+      projectId: params.projectId,
       mediaType: 'video',
       prompt: `Composed video with ${params.shots.length} shots`,
       outputUrl: result.videoUrl,

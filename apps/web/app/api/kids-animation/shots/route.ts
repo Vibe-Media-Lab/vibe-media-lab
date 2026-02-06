@@ -20,7 +20,7 @@ export const POST = createApiHandler<ShotsResponse>(
     const body = await request.json()
     const validated = ShotsRequestSchema.parse(body)
 
-    const { sessionId, script, anchors, style, formFactor = 'longform' } = validated
+    const { sessionId, projectId, script, anchors, style, formFactor = 'longform' } = validated
     const styleConfig = KIDS_ANIMATION_STYLES[style]
     const formFactorPreset = KIDS_FORM_FACTOR_PRESETS[formFactor]
 
@@ -39,6 +39,7 @@ export const POST = createApiHandler<ShotsResponse>(
       aspectRatio: formFactorPreset.shot.aspectRatio,
       resolution: formFactorPreset.shot.resolution,
       userId: user.id,
+      projectId,
       sessionId,
       metadata: { style, formFactor },
     })

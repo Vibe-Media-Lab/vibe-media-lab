@@ -23,7 +23,7 @@ export const POST = createApiHandler<AudioResponse>(
     const body = await request.json()
     const validated = AudioRequestSchema.parse(body)
 
-    const { sessionId, shots, bgmPrompt, bgmDirection, existingTts, existingBgm } = validated
+    const { sessionId, projectId, shots, bgmPrompt, bgmDirection, existingTts, existingBgm } = validated
 
     // 총 영상 길이 계산 (샷 수 × 10초)
     const totalDurationSec = shots.length * 10
@@ -85,6 +85,7 @@ export const POST = createApiHandler<AudioResponse>(
         similarityBoost: 0.8, // 자연스러운 음성
         style: 0.35,          // 약간의 표현력 (동화책 느낌)
         userId: user.id,
+        projectId,
         sessionId,
       })
 
@@ -127,6 +128,7 @@ export const POST = createApiHandler<AudioResponse>(
         instrumental: true,
         style: 'children music, orchestral, cheerful, happy, playful, whimsical',
         userId: user.id,
+        projectId,
         sessionId,
       })
 

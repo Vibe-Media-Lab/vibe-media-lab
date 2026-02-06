@@ -8,7 +8,7 @@ import type { VideoItem } from '../types'
 interface VideoTimelinePreviewProps {
   data: VideoItem[]
   onRegenerateItem?: (id: string) => void
-  onLikeItem?: (id: string) => void
+  onLikeItem?: (id: string, url: string) => void
   onDownloadItem?: (id: string, url: string) => void
 }
 
@@ -17,7 +17,7 @@ export function VideoTimelinePreview({ data, onRegenerateItem, onLikeItem, onDow
   const [likedItems, setLikedItems] = React.useState<Set<string>>(new Set())
   const videoRefs = React.useRef<Record<string, HTMLVideoElement | null>>({})
 
-  const handleLike = (id: string) => {
+  const handleLike = (id: string, url: string) => {
     setLikedItems((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(id)) {
@@ -27,7 +27,7 @@ export function VideoTimelinePreview({ data, onRegenerateItem, onLikeItem, onDow
       }
       return newSet
     })
-    onLikeItem?.(id)
+    onLikeItem?.(id, url)
   }
 
   const handleDownload = async (id: string, url: string) => {
@@ -127,7 +127,7 @@ export function VideoTimelinePreview({ data, onRegenerateItem, onLikeItem, onDow
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      handleLike(item.id)
+                      handleLike(item.id, item.url!)
                     }}
                     className="rounded-full bg-black/60 p-1 hover:bg-black/80"
                     title="좋아요"

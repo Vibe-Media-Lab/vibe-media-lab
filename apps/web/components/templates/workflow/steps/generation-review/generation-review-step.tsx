@@ -101,6 +101,7 @@ export function GenerationReviewStep({
   onApprove,
   inputContext,
   sessionId,
+  projectId,
 }: GenerationReviewStepProps) {
   const hasValidData = hasValidGeneratedData(value, config.previewType)
 
@@ -195,6 +196,7 @@ export function GenerationReviewStep({
 
     const baseRequest = {
       sessionId: sessionId || storyResponse?.sessionId || `session-${Date.now()}`,
+      projectId: projectId || undefined,
       topic: setupData.topic,
       formFactor: setupData.formFactor || 'longform',
       style: setupData.style || 'pixar',
@@ -828,9 +830,20 @@ export function GenerationReviewStep({
     console.log('Regenerate item:', itemId)
   }
 
-  const handleLikeItem = async (itemId: string) => {
-    // TODO: Implement like functionality (save to library favorites)
-    console.log('Like item:', itemId)
+  const handleLikeItem = async (itemId: string, url: string) => {
+    try {
+      const response = await fetch('/api/library/favorite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outputUrl: url }),
+      })
+      const result = await response.json()
+      if (!result.success) {
+        console.error('Failed to toggle favorite:', result.error)
+      }
+    } catch (error) {
+      console.error('Failed to toggle favorite:', error)
+    }
   }
 
   const handleDownloadItem = async (itemId: string, url: string) => {

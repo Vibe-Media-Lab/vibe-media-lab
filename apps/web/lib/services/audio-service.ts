@@ -137,6 +137,7 @@ async function generateTTSInternal(params: TTSParams): Promise<GenerationResult>
   if (url && params.userId) {
     await saveToLibrary({
       userId: params.userId,
+      projectId: params.projectId,
       mediaType: 'tts',
       prompt: params.text,
       outputUrl: url,
@@ -214,6 +215,7 @@ export async function batchGenerateTTS(
       similarityBoost: task.similarityBoost,
       style: task.style,
       userId: params.userId,
+      projectId: params.projectId,
       sessionId: params.sessionId,
       metadata: { ...params.metadata, batchIndex: i },
     })
@@ -440,6 +442,7 @@ export async function generateBGM(params: BGMParams): Promise<BGMGenerationResul
         // Library에 저장 (영구 URL 또는 원본 URL)
         await saveToLibrary({
           userId: params.userId,
+          projectId: params.projectId,
           mediaType: 'bgm',
           prompt: params.prompt,
           outputUrl: track.url,

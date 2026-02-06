@@ -25,6 +25,7 @@ export interface GenerationReviewStepProps {
   onApprove?: () => void
   inputContext?: Record<string, unknown>
   sessionId?: string
+  projectId?: string | null
 }
 
 // Re-export from shared
@@ -146,7 +147,7 @@ export interface PreviewProps {
   editable?: boolean
   onEdit?: (data: unknown) => void
   onRegenerateItem?: (itemId: string) => void
-  onLikeItem?: (itemId: string) => void
+  onLikeItem?: (itemId: string, url: string) => void
   onDownloadItem?: (itemId: string, url: string) => void
   selectedBgmIndex?: number
   onSelectBgm?: (index: number) => void
