@@ -247,9 +247,22 @@ export function GenerationReviewStep({
         const expandedData = unwrapApiResponse<{ expanded?: unknown[] }>(
           inputContext?.expand as { data?: { success?: boolean; data?: { expanded?: unknown[] } } }
         )
+        // LLM 응답에서 shotNumber가 누락될 수 있으므로 인덱스 기반으로 보장
+        const scriptForShots = script as { shots?: Array<Record<string, unknown>> } | undefined
+        const sanitizedScript = scriptForShots?.shots
+          ? {
+              ...scriptForShots,
+              shots: scriptForShots.shots.map((shot, idx) => ({
+                ...shot,
+                shotNumber: shot.shotNumber ?? idx + 1,
+                id: shot.id || `shot-${idx + 1}`,
+                duration: shot.duration ?? 10,
+              })),
+            }
+          : script
         return {
           ...baseRequest,
-          script,
+          script: sanitizedScript,
           anchors,
           expanded: expandedData?.expanded || [],
         }
