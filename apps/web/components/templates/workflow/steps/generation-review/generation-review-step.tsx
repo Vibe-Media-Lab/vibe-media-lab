@@ -26,8 +26,15 @@ import { Preview } from './preview'
 function extractErrorMessage(errorData: Record<string, unknown>, fallback: string): string {
   const error = errorData.error
   if (typeof error === 'string') return error
-  if (error && typeof error === 'object' && 'message' in error) {
-    return (error as { message: string }).message
+  if (error && typeof error === 'object') {
+    const err = error as { message?: string; details?: { issues?: Array<{ path?: unknown[]; message?: string }> } }
+    const message = err.message || fallback
+    const issues = err.details?.issues
+    if (issues && issues.length > 0) {
+      const detail = issues.map((i) => `${(i.path || []).join('.')}: ${i.message}`).join(', ')
+      return `${message} (${detail})`
+    }
+    return message
   }
   return fallback
 }
