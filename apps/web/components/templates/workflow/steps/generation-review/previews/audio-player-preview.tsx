@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { Play, Pause, Volume2, RotateCcw, Check } from 'lucide-react'
+import { Play, Pause, Volume2, Check } from 'lucide-react'
 import type { AudioItem } from '../types'
 
 interface AudioPlayerPreviewProps {

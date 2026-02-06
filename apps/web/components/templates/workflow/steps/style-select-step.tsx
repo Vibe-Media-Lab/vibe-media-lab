@@ -16,7 +16,6 @@ interface StyleSelectStepProps {
 }
 
 export function StyleSelectStep({
-  stepId,
   label,
   description,
   config,
@@ -80,6 +79,7 @@ export function StyleSelectStep({
             >
               {option.preview && (
                 <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-white/10">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={option.preview}
                     alt=""

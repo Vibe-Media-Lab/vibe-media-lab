@@ -1,33 +1,10 @@
 import { createApiHandler } from '@/lib/api'
-import { z } from 'zod'
 import { editImage, getImageServiceProvider } from '@/lib/services'
 import { KIDS_FORM_FACTOR_PRESETS } from '@vibe-media-lab/shared'
 import { getLogger } from '@/lib/logger'
+import { ExpandRequestSchema, type ExpandedAnchor, type ExpandResponse } from '@/lib/api/kids-animation/types'
 
 const logger = getLogger('kids-animation/expand')
-
-/**
- * 앵커 확장 변형 타입
- */
-interface ExpandedAnchor {
-  id: string
-  originalId: string
-  category: 'character' | 'background'
-  name: string
-  variation: string
-  url: string
-}
-
-interface ExpandResponse {
-  sessionId: string
-  expanded: ExpandedAnchor[]
-  provider: 'gemini' | 'kieai' | 'mock'
-  stats: {
-    total: number
-    success: number
-    failed: number
-  }
-}
 
 /**
  * 캐릭터 변형 프롬프트 (Gemini 3 Pro Image 최적화)
@@ -52,19 +29,6 @@ const BACKGROUND_VARIATIONS = {
 type CharacterVariation = keyof typeof CHARACTER_VARIATIONS
 type BackgroundVariation = keyof typeof BACKGROUND_VARIATIONS
 
-const ExpandRequestSchema = z.object({
-  sessionId: z.string(),
-  anchors: z.array(z.object({
-    id: z.string(),
-    category: z.enum(['character', 'background']),
-    name: z.string(),
-    url: z.string(),
-  })),
-  formFactor: z.enum(['longform', 'shortform']).default('longform'),
-  // front/wide는 앵커 생성 단계에서 이미 생성되므로 기본값에서 제외
-  characterVariations: z.array(z.enum(['three_quarter', 'happy', 'sad'])).optional(),
-  backgroundVariations: z.array(z.enum(['medium'])).optional(),
-})
 
 /**
  * POST /api/kids-animation/expand

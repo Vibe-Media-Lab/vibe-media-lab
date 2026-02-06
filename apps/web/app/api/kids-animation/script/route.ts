@@ -7,7 +7,7 @@ import {
   type KidsScript,
   type KidsShot,
 } from '@vibe-media-lab/shared'
-import { generateScript, type GeneratedScript } from '@/lib/services'
+import { generateScript } from '@/lib/services'
 import {
   ScriptRequestSchema,
   type ScriptResponse,
@@ -35,7 +35,7 @@ interface AnchorPrompt {
  * Supports both legacy and enhanced (Zootopia Protocol) story formats
  */
 export const POST = createApiHandler<ScriptResponse>(
-  async (request, { user, requestId }) => {
+  async (request) => {
     const body = await request.json()
     const validated = ScriptRequestSchema.parse(body)
 

@@ -9,20 +9,17 @@ import type {
   KidsZootopiaPlot,
   KidsBasicPlot,
 } from '../types'
+import { unwrapApiData } from '@/lib/api/kids-animation/types'
 
 // Format story object to markdown (supports both legacy and enhanced Zootopia format)
 function formatStoryToMarkdown(storyResponse: unknown): string {
   // Unwrap nested API response: { success, data: { sessionId, story }, meta }
-  let unwrapped = storyResponse as Record<string, unknown>
-
-  // Handle { success, data: {...} } wrapper from API handler
-  if (unwrapped && typeof unwrapped === 'object' && 'success' in unwrapped && 'data' in unwrapped) {
-    unwrapped = unwrapped.data as Record<string, unknown>
-  }
+  const unwrapped = unwrapApiData<{ story?: KidsStoryData } | KidsStoryData>(storyResponse)
 
   // Handle { sessionId, story } structure
-  const response = unwrapped as { story?: KidsStoryData } | KidsStoryData
-  const story = response && 'story' in response ? response.story : (response as KidsStoryData)
+  const story = unwrapped && typeof unwrapped === 'object' && 'story' in unwrapped
+    ? (unwrapped as { story?: KidsStoryData }).story
+    : (unwrapped as KidsStoryData)
 
   if (!story || typeof story !== 'object') {
     return typeof storyResponse === 'string'

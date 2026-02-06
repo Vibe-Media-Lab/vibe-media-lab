@@ -1,6 +1,5 @@
 'use client'
 
-import { cn } from '@/lib/utils'
 import { Loader2, Sparkles } from 'lucide-react'
 
 interface TextSkeletonProps {

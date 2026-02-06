@@ -1,6 +1,6 @@
 'use client'
 
-import { Film, Clock, Loader2 } from 'lucide-react'
+import { Film, Clock } from 'lucide-react'
 
 interface VideoPlayerPreviewProps {
   data: {
@@ -31,6 +31,7 @@ export function VideoPlayerPreview({ data }: VideoPlayerPreviewProps) {
         ) : data.thumbnailUrl ? (
           // 영상 합성 진행 중 상태 (썸네일 + 프로그레스)
           <div className="relative h-full w-full">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={data.thumbnailUrl}
               alt="영상 썸네일"

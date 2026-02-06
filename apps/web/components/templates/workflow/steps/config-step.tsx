@@ -140,17 +140,17 @@ export function ConfigStep({
               <button
                 id={`${stepId}-${field.id}`}
                 role="switch"
-                aria-checked={Boolean(value[field.id] ?? field.default ?? false)}
+                aria-checked={!!(value[field.id] ?? field.default ?? false)}
                 onClick={() =>
                   handleFieldChange(
                     field.id,
-                    !Boolean(value[field.id] ?? field.default ?? false)
+                    !(value[field.id] ?? field.default ?? false)
                   )
                 }
                 className={cn(
                   'relative h-6 w-11 rounded-full transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-neon-pink)] focus-visible:ring-offset-2',
-                  Boolean(value[field.id] ?? field.default ?? false)
+                  (value[field.id] ?? field.default ?? false)
                     ? 'bg-[var(--color-neon-pink)]'
                     : 'bg-white/30'
                 )}

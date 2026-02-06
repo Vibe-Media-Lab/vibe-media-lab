@@ -194,7 +194,7 @@ export function ImageGenerator() {
                 </p>
               </div>
               <Button variant="outline" asChild className="w-full">
-                <a href={result.outputUrl} download target="_blank" rel="noopener">
+                <a href={result.outputUrl} download target="_blank" rel="noreferrer">
                   다운로드
                 </a>
               </Button>

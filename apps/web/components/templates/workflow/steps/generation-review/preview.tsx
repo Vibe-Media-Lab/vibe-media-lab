@@ -10,24 +10,14 @@ import {
   VideoPlayerPreview,
   AudioPlayerPreview,
 } from './previews'
-
-/**
- * API 응답에서 실제 데이터를 추출하는 헬퍼
- * createApiHandler가 { success, data: ... } 형태로 래핑하기 때문
- */
-function unwrapApiResponse<T>(data: unknown): T {
-  if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
-    return (data as { success: boolean; data: T }).data
-  }
-  return data as T
-}
+import { unwrapApiData } from '@/lib/api/kids-animation/types'
 
 /**
  * video-timeline용 데이터 추출
  * API 응답: { sessionId, shots: [...] } → VideoItem[] 변환
  */
 function extractVideoItems(data: unknown): VideoItem[] {
-  const unwrapped = unwrapApiResponse<{ shots?: unknown[] } | unknown[]>(data)
+  const unwrapped = unwrapApiData<{ shots?: unknown[] } | unknown[]>(data)
 
   // 이미 배열인 경우 (Mock 데이터)
   if (Array.isArray(unwrapped)) {
@@ -56,7 +46,7 @@ function extractVideoItems(data: unknown): VideoItem[] {
  * API 응답: { sessionId, tts: [{id, shotNumber, audioUrl, duration}, ...], bgmTracks: [{id, url, duration}, ...] }
  */
 function extractAudioItems(data: unknown): AudioItem[] {
-  const unwrapped = unwrapApiResponse<{
+  const unwrapped = unwrapApiData<{
     tts?: Array<{ id: string; shotNumber?: number; audioUrl: string; duration?: number }>
     bgmTracks?: Array<{ id: string; url: string; duration: number; title?: string }>
   } | unknown[]>(data)
@@ -165,7 +155,7 @@ export function Preview({
       )
     case 'video-player': {
       // FinalResponse: { videoUrl, thumbnailUrl, totalDuration }
-      const finalData = unwrapApiResponse<{
+      const finalData = unwrapApiData<{
         videoUrl?: string
         url?: string
         thumbnailUrl?: string

@@ -279,8 +279,6 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>((set, ge
     try {
       await saveToServer(state)
       set({ lastSavedAt: new Date() })
-    } catch (error) {
-      throw error
     } finally {
       set({ isSaving: false })
     }

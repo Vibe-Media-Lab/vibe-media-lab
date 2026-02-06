@@ -76,7 +76,6 @@ export function createApiHandler<T>(
       )
     } catch (error) {
       if (error instanceof ZodError) {
-        // eslint-disable-next-line no-console
         console.error(`[${requestId}] Validation error:`, JSON.stringify(error.errors, null, 2))
         const apiError = ApiError.fromZodError(error)
         return NextResponse.json(
@@ -88,7 +87,6 @@ export function createApiHandler<T>(
       const { error: apiError, shouldLog } = handleError(error, { requestId })
 
       if (shouldLog) {
-        // eslint-disable-next-line no-console
         console.error(`[${requestId}] Unhandled error:`, error)
       }
 

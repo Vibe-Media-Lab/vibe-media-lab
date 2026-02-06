@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { Edit3, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { Shot, AnchorPrompt, ScriptData } from '../types'
+import { unwrapApiData } from '@/lib/api/kids-animation/types'
 
 interface ShotListPreviewProps {
   data: unknown
@@ -22,11 +23,7 @@ export function ShotListPreview({ data, editable, onEdit }: ShotListPreviewProps
   const [editValue, setEditValue] = React.useState('')
 
   // Extract data from API response format
-  let unwrapped = data as Record<string, unknown>
-  if (unwrapped && typeof unwrapped === 'object' && 'success' in unwrapped && 'data' in unwrapped) {
-    unwrapped = unwrapped.data as Record<string, unknown>
-  }
-  const response = unwrapped as ScriptData
+  const response = unwrapApiData<ScriptData>(data)
   const shots = response?.script?.shots || response?.shots || []
   const bgmPrompt = response?.script?.bgmPrompt || response?.bgmPrompt || ''
   const anchorPrompts = response?.anchorPrompts || []
@@ -39,7 +36,7 @@ export function ShotListPreview({ data, editable, onEdit }: ShotListPreviewProps
   const saveEdit = () => {
     if (!editingField || !onEdit) return
 
-    const updatedData = JSON.parse(JSON.stringify(unwrapped))
+    const updatedData = JSON.parse(JSON.stringify(response))
     const targetShots = updatedData.script?.shots || updatedData.shots || []
     const targetAnchors = updatedData.anchorPrompts || []
 

@@ -36,7 +36,6 @@ export function AiGenerateStep({
   config,
   value,
   onChange,
-  inputContext,
 }: AiGenerateStepProps) {
   const [status, setStatus] = React.useState<
     'idle' | 'generating' | 'success' | 'error'

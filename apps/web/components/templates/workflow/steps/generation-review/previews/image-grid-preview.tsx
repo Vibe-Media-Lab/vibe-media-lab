@@ -4,6 +4,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { Loader2, RotateCcw, Heart, Download } from 'lucide-react'
 import type { ImageItem } from '../types'
+import { unwrapApiData } from '@/lib/api/kids-animation/types'
 
 interface ImageGridPreviewProps {
   data: unknown
@@ -49,18 +50,12 @@ export function ImageGridPreview({ data, onRegenerateItem, onLikeItem, onDownloa
       console.error('Download failed:', err)
     }
   }
-  // Unwrap API response format
-  let unwrapped = data as Record<string, unknown>
-  if (unwrapped && typeof unwrapped === 'object' && 'success' in unwrapped && 'data' in unwrapped) {
-    unwrapped = unwrapped.data as Record<string, unknown>
-  }
-
   // Extract items from various response formats
-  const response = unwrapped as {
+  const response = unwrapApiData<{
     expanded?: ImageItem[]
     anchors?: ImageItem[]
     images?: ImageItem[]
-  }
+  }>(data)
   const items: ImageItem[] = response?.expanded || response?.anchors || response?.images || (Array.isArray(data) ? data as ImageItem[] : [])
 
   // Group by category if available
@@ -80,6 +75,7 @@ export function ImageGridPreview({ data, onRegenerateItem, onLikeItem, onDownloa
             className="group relative aspect-square overflow-hidden rounded-lg bg-white/10"
           >
             {item.url ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={item.url}
                 alt={item.label || item.name || item.id}

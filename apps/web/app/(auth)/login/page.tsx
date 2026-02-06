@@ -65,7 +65,7 @@ function LoginForm() {
 
       router.push(redirectTo)
       router.refresh()
-    } catch (err) {
+    } catch {
       setError('로그인 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
@@ -88,7 +88,7 @@ function LoginForm() {
         setError(error.message)
         setLoading(false)
       }
-    } catch (err) {
+    } catch {
       setError('Google 로그인 중 오류가 발생했습니다.')
       setLoading(false)
     }

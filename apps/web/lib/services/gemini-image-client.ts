@@ -300,7 +300,7 @@ export async function urlToBase64(
 
       logger.debug('Read local file', { path: filePath, size: buffer.length })
       return { base64, mimeType }
-    } catch (error) {
+    } catch {
       throw new GeminiImageError(`Failed to read local image: ${filePath}`)
     }
   }

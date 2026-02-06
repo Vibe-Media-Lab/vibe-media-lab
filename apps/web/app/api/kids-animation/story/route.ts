@@ -15,11 +15,11 @@ import {
  * - Gemini API 또는 Mock 모드로 동작
  */
 export const POST = createApiHandler<StoryResponse>(
-  async (request, { user, requestId }) => {
+  async (request) => {
     const body = await request.json()
     const validated = StoryRequestSchema.parse(body)
 
-    const { sessionId, topic, formFactor, style } = validated
+    const { sessionId, topic, style } = validated
 
     // LLM 서비스를 통한 스토리 생성
     // formFactor는 스토리 생성에 직접 영향 없음 (이미지/비디오 단계에서 사용)

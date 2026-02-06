@@ -45,7 +45,7 @@ export function ImageGridSkeleton({
             )}
           >
             {item.status === 'completed' && item.completedUrl ? (
-              // 완료된 이미지 표시
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={item.completedUrl}
                 alt={`Generated ${item.index + 1}`}

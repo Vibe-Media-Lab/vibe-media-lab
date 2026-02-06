@@ -23,7 +23,7 @@ const DIFFICULTY_LABELS: Record<TemplateDifficulty, string> = {
   hard: '어려움',
 }
 
-export function TemplateCard({ template, priority }: TemplateCardProps) {
+export function TemplateCard({ template }: TemplateCardProps) {
   const videoRef = React.useRef<HTMLVideoElement>(null)
   const [isHovered, setIsHovered] = React.useState(false)
 
@@ -66,6 +66,7 @@ export function TemplateCard({ template, priority }: TemplateCardProps) {
           )}
         >
           {/* Poster image - visible until video plays */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={template.poster}
             alt={template.title}

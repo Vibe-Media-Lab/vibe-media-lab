@@ -24,6 +24,11 @@ import type {
   GenerationProgress,
   GenerationProgressItem,
 } from '@vibe-media-lab/shared'
+import {
+  DEFAULT_KIDS_SETUP,
+  asKidsContext,
+  unwrapStepResult,
+} from '@/lib/api/kids-animation/types'
 
 // ============================================================
 // Types
@@ -75,7 +80,7 @@ interface ProgressDisplayProps {
   showPerItem?: boolean
 }
 
-function ProgressDisplay({ progress, showPerItem }: ProgressDisplayProps) {
+function _ProgressDisplay({ progress, showPerItem }: ProgressDisplayProps) {
   const percentage =
     progress.total > 0 ? (progress.current / progress.total) * 100 : 0
 
@@ -316,6 +321,7 @@ function UploadArea({ config, files, onFilesChange }: UploadAreaProps) {
                 key={file.id}
                 className="group relative aspect-square overflow-hidden rounded-lg bg-white/10"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={file.preview}
                   alt={file.file.name}
@@ -473,6 +479,7 @@ function GeneratedPreview({ images, onRegenerateItem, onLikeItem, onDownloadItem
             className="group relative aspect-square overflow-hidden rounded-lg bg-white/10"
           >
             {image.url ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={image.url}
                 alt={image.label || image.id}
@@ -589,7 +596,7 @@ export function MediaChoiceStep({
   })
   const [error, setError] = React.useState<string | null>(null)
 
-  const defaultMode = config.modes.find((m) => m.default)?.id || 'generate'
+  const _defaultMode = config.modes.find((m) => m.default)?.id || 'generate'
 
   // Handle mode selection
   const handleModeSelect = (mode: Mode) => {
@@ -611,38 +618,20 @@ export function MediaChoiceStep({
     setStatus('reviewing')
   }
 
-  // Helper to unwrap API response
-  const unwrapApiResponse = <T,>(data: unknown): T | undefined => {
-    const obj = data as Record<string, unknown> | undefined
-    if (obj && typeof obj === 'object' && 'success' in obj && 'data' in obj) {
-      return obj.data as T
-    }
-    return obj as T | undefined
-  }
-
   // Handle AI generation - calls actual API
   const handleGenerate = async () => {
     setStatus('generating')
     setError(null)
 
     // Extract data from inputContext
-    const setupData = (inputContext?.setup as Record<string, unknown>) || {}
-    const scriptStepData = inputContext?.script as { data?: unknown } | undefined
-    const scriptResponse = unwrapApiResponse<{
-      sessionId?: string
-      script?: unknown
-      anchorPrompts?: Array<{
-        id: string
-        category: 'character' | 'background'
-        name: string
-        prompt: string
-      }>
-    }>(scriptStepData?.data)
+    const ctx = asKidsContext(inputContext)
+    const setupData = ctx.setup ?? DEFAULT_KIDS_SETUP
+    const scriptResult = unwrapStepResult(ctx.script)
 
-    const anchorPrompts = scriptResponse?.anchorPrompts || []
-    const sessionId = scriptResponse?.sessionId || `session-${Date.now()}`
-    const formFactor = (setupData.formFactor as string) || 'longform'
-    const style = (setupData.style as string) || 'pixar'
+    const anchorPrompts = scriptResult?.anchorPrompts || []
+    const sessionId = scriptResult?.sessionId || `session-${Date.now()}`
+    const formFactor = setupData.formFactor || 'longform'
+    const style = setupData.style || 'pixar'
 
     // If no anchor prompts, show error
     if (anchorPrompts.length === 0) {
@@ -742,19 +731,11 @@ export function MediaChoiceStep({
   // Handle individual item regeneration
   const handleRegenerateItem = async (itemId: string) => {
     // Find the anchor prompt for this item
-    const setupData = (inputContext?.setup as Record<string, unknown>) || {}
-    const scriptStepData = inputContext?.script as { data?: unknown } | undefined
-    const scriptResponse = unwrapApiResponse<{
-      sessionId?: string
-      anchorPrompts?: Array<{
-        id: string
-        category: 'character' | 'background'
-        name: string
-        prompt: string
-      }>
-    }>(scriptStepData?.data)
+    const regenCtx = asKidsContext(inputContext)
+    const regenSetup = regenCtx.setup ?? DEFAULT_KIDS_SETUP
+    const regenScriptResult = unwrapStepResult(regenCtx.script)
 
-    const anchorPrompts = scriptResponse?.anchorPrompts || []
+    const anchorPrompts = regenScriptResult?.anchorPrompts || []
     const targetPrompt = anchorPrompts.find((ap) => ap.id === itemId)
 
     if (!targetPrompt) {
@@ -762,9 +743,9 @@ export function MediaChoiceStep({
       return
     }
 
-    const sessionId = scriptResponse?.sessionId || `session-${Date.now()}`
-    const formFactor = (setupData.formFactor as string) || 'longform'
-    const style = (setupData.style as string) || 'pixar'
+    const sessionId = regenScriptResult?.sessionId || `session-${Date.now()}`
+    const formFactor = regenSetup.formFactor || 'longform'
+    const style = regenSetup.style || 'pixar'
 
     // Update UI to show loading for this item
     setGeneratedImages((prev) =>

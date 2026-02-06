@@ -36,7 +36,6 @@ function formatFileSize(bytes: number): string {
 }
 
 export function MediaUploadStep({
-  stepId,
   label,
   description,
   config,
@@ -163,6 +162,7 @@ export function MediaUploadStep({
                 className="flex items-center gap-3 rounded-lg bg-white/5 p-3"
               >
                 {uploadedFile.preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={uploadedFile.preview}
                     alt=""

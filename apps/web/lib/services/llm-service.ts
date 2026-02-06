@@ -649,8 +649,8 @@ async function mockGenerateScript(
   // Enhanced story 형식인지 확인
   const isEnhanced = isEnhancedStory(story)
   const characters = isEnhanced ? story.characters : []
-  const protagonist = characters.find((c) => c.role === 'protagonist_a')
-  const partner = characters.find((c) => c.role === 'protagonist_b')
+  const _protagonist = characters.find((c) => c.role === 'protagonist_a')
+  const _partner = characters.find((c) => c.role === 'protagonist_b')
 
   const shots = Array.from({ length: maxShots }, (_, i) => {
     const actIndex = Math.floor((i / maxShots) * actKeys.length)

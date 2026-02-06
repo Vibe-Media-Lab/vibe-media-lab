@@ -1,7 +1,5 @@
 import { z } from 'zod'
 import type {
-  KidsQualityPreset,
-  KidsAnimationStyle,
   KidsStory,
   KidsScript,
   KidsShot,
@@ -185,6 +183,21 @@ export const AudioRequestSchema = z.object({
 })
 export type AudioRequest = z.infer<typeof AudioRequestSchema>
 
+export const ExpandRequestSchema = z.object({
+  sessionId: z.string(),
+  anchors: z.array(z.object({
+    id: z.string(),
+    category: z.enum(['character', 'background']),
+    name: z.string(),
+    url: z.string(),
+  })),
+  formFactor: z.enum(['longform', 'shortform']).default('longform'),
+  // front/wide는 앵커 생성 단계에서 이미 생성되므로 기본값에서 제외
+  characterVariations: z.array(z.enum(['three_quarter', 'happy', 'sad'])).optional(),
+  backgroundVariations: z.array(z.enum(['medium'])).optional(),
+})
+export type ExpandRequest = z.infer<typeof ExpandRequestSchema>
+
 export const FinalRequestSchema = z.object({
   sessionId: z.string(),
   projectId: z.string().optional(),
@@ -273,6 +286,114 @@ export interface FinalResponse {
   videoUrl: string
   thumbnailUrl: string
   totalDuration: number
+}
+
+// ============================================================
+// Step Context Types (inputContext 타입 안전성)
+// ============================================================
+
+/** API 단계 결과의 공통 래퍼 (onChange로 저장되는 구조) */
+export interface ApiStepResult<T> {
+  data: { success: boolean; data: T }
+  generatedAt: Date
+}
+
+export interface KidsSetupData {
+  topic: string
+  formFactor: 'longform' | 'shortform'
+  style: 'pixar' | 'disney' | 'dreamworks'
+}
+
+export interface KidsAnchorsStepData {
+  mode: 'upload' | 'generate'
+  files?: Array<{ id: string; file: File; preview: string; category?: 'character' | 'background' }>
+  generated?: Array<{ id: string; url: string; category?: 'character' | 'background'; label?: string; dbId?: string }>
+}
+
+export interface ExpandedAnchor {
+  id: string
+  originalId: string
+  category: 'character' | 'background'
+  name: string
+  variation: string
+  url: string
+}
+
+export interface ExpandResponse {
+  sessionId: string
+  expanded: ExpandedAnchor[]
+  provider?: 'gemini' | 'kieai' | 'mock'
+  stats: { total: number; success: number; failed: number }
+}
+
+/** setup 기본값 (컨텍스트 누락 시 폴백) */
+export const DEFAULT_KIDS_SETUP: KidsSetupData = {
+  topic: '',
+  formFactor: 'longform',
+  style: 'pixar',
+}
+
+/** Kids Animation 파이프라인 전체 컨텍스트 */
+export interface KidsAnimationContext {
+  setup: KidsSetupData
+  story: ApiStepResult<StoryResponse> | null
+  script: ApiStepResult<ScriptResponse> | null
+  anchors: KidsAnchorsStepData | null
+  expand: ApiStepResult<ExpandResponse> | null
+  shots: ApiStepResult<ShotsResponse> | null
+  videos: ApiStepResult<VideosResponse> | null
+  audio: ApiStepResult<AudioResponse> | null
+  final: ApiStepResult<FinalResponse> | null
+}
+
+/**
+ * Record<string, unknown> → Partial<KidsAnimationContext> 좁히기
+ *
+ * 워크플로우 시스템이 제네릭(`Record<string, unknown>`)으로 관리하는
+ * inputContext를 Kids Animation 전용 타입으로 좁힌다.
+ * 런타임 검증 없이 캐스트만 수행하므로, 워크플로우 내부에서만 사용해야 한다.
+ * 기존 18개 개별 `as` 캐스트를 이 한 곳으로 집중시킨 의도적 설계.
+ */
+export function asKidsContext(ctx: Record<string, unknown> | undefined): Partial<KidsAnimationContext> {
+  return (ctx ?? {}) as Partial<KidsAnimationContext>
+}
+
+/**
+ * ApiStepResult<T> → T 언래핑
+ *
+ * 워크플로우 onChange로 저장된 단계 결과에서 실제 데이터를 추출한다.
+ * 저장 구조: `{ data: { success: boolean, data: T }, generatedAt: Date }`
+ *
+ * @example
+ * const storyData = unwrapStepResult(ctx.story)
+ * const story = storyData?.story // KidsStory | undefined
+ */
+export function unwrapStepResult<T>(step: ApiStepResult<T> | null | undefined): T | undefined {
+  if (!step) return undefined
+  const resp = step.data
+  if (resp && typeof resp === 'object' && 'success' in resp && 'data' in resp) {
+    return resp.data
+  }
+  return resp as T | undefined
+}
+
+/**
+ * API 응답 `{ success, data: T }` → T 언래핑
+ *
+ * 프리뷰 컴포넌트에서 `GenerationResult.data`를 받아 실제 데이터를 추출한다.
+ * createApiHandler가 `{ success: true, data: T }` 형태로 래핑하므로,
+ * 이를 벗기는 역할. Mock 데이터처럼 래핑되지 않은 경우 그대로 반환한다.
+ *
+ * @example
+ * // 프리뷰 컴포넌트에서:
+ * const response = unwrapApiData<ShotsResponse>(data)
+ * const shots = response?.shots || []
+ */
+export function unwrapApiData<T>(data: unknown): T {
+  if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
+    return (data as { data: T }).data
+  }
+  return data as T
 }
 
 // ============================================================

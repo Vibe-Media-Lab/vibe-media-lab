@@ -46,7 +46,6 @@ export function WorkflowContainer({ template }: WorkflowContainerProps) {
     setCompleted,
     reset,
     setProjectId,
-    loadProject,
     restoreFromProject,
   } = useWorkflowStore()
 

@@ -484,7 +484,7 @@ export async function generateBGM(params: BGMParams): Promise<BGMGenerationResul
   }
 }
 
-async function mockGenerateBGM(params: BGMParams): Promise<BGMGenerationResult> {
+async function mockGenerateBGM(_params: BGMParams): Promise<BGMGenerationResult> {
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
   // Mock placeholder BGM URLs for testing (royalty-free music)

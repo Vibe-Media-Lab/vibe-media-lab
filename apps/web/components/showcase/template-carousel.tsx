@@ -367,6 +367,7 @@ function TemplateCard({ template, isDragging }: { template: Template; isDragging
         )}
       >
         {/* Poster image - visible until video plays */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={template.poster}
           alt={template.title}

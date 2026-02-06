@@ -4,7 +4,6 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 import {
   Sparkles,
-  Loader2,
   Check,
   AlertCircle,
   RotateCcw,
@@ -12,13 +11,31 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { z } from 'zod'
+import {
+  StoryRequestSchema,
+  ScriptRequestSchema,
+  ExpandRequestSchema,
+  ShotsRequestSchema,
+  VideoRequestSchema,
+  AudioRequestSchema,
+  FinalRequestSchema,
+  DEFAULT_KIDS_SETUP,
+  asKidsContext,
+  unwrapStepResult,
+  unwrapApiData,
+} from '@/lib/api/kids-animation/types'
+import type {
+  ShotsResponse,
+  AudioResponse,
+  ApiStepResult,
+} from '@/lib/api/kids-animation/types'
 import type {
   GenerationReviewStepProps,
   GenerationProgress,
   GenerationProgressItem,
   StepStatus,
 } from './types'
-import { ProgressDisplay } from './progress-display'
 import { GeneratingPreview } from './generating-preview'
 import { Preview } from './preview'
 
@@ -39,6 +56,31 @@ function extractErrorMessage(errorData: Record<string, unknown>, fallback: strin
   return fallback
 }
 
+// generateAction → Zod schema 매핑 (클라이언트 사전 검증용)
+// videos는 개별 shot 단위 요청이라 별도 처리, expand도 분할 요청으로 별도 처리
+const schemaMap: Record<string, z.ZodSchema> = {
+  'kids/story': StoryRequestSchema,
+  'kids/script': ScriptRequestSchema,
+  'kids/shots': ShotsRequestSchema,
+  'kids/audio': AudioRequestSchema,
+  'kids/final': FinalRequestSchema,
+}
+
+// 요청 데이터를 스키마로 사전 검증
+function validateRequestBody(body: unknown, schema: z.ZodSchema): void {
+  const result = schema.safeParse(body)
+  if (!result.success) {
+    const issues = result.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join('.')}: ${i.message}`)
+      .join(', ')
+    const more = result.error.issues.length > 5
+      ? ` (외 ${result.error.issues.length - 5}개)`
+      : ''
+    throw new Error(`요청 데이터 검증 실패: ${issues}${more}`)
+  }
+}
+
 // 실제로 유효한 데이터가 있는지 확인
 function hasValidGeneratedData(val: unknown, previewType: string): boolean {
   if (!val) return false
@@ -47,10 +89,7 @@ function hasValidGeneratedData(val: unknown, previewType: string): boolean {
   if (!data) return false
 
   // API response unwrap: { success, data: { ... } } -> { ... }
-  let unwrapped: unknown = data
-  if (typeof data === 'object' && data !== null && 'success' in data && 'data' in data) {
-    unwrapped = (data as { data: unknown }).data
-  }
+  const unwrapped: unknown = unwrapApiData(data)
 
   switch (previewType) {
     case 'video-timeline': {
@@ -173,49 +212,27 @@ export function GenerationReviewStep({
     })
   }
 
-  // Helper to unwrap API response: { success, data: { ... }, meta } -> { ... }
-  const unwrapApiResponse = <T,>(stepData: { data?: { success?: boolean; data?: T } } | undefined): T | undefined => {
-    const apiResponse = stepData?.data
-    if (apiResponse && typeof apiResponse === 'object' && 'success' in apiResponse && 'data' in apiResponse) {
-      return apiResponse.data as T
-    }
-    return apiResponse as T | undefined
-  }
-
   // Build API request body from input context
   const buildRequestBody = (): Record<string, unknown> => {
-    const setupData = (inputContext?.setup as Record<string, unknown>) || {}
+    const ctx = asKidsContext(inputContext)
+    const setupData = ctx.setup ?? DEFAULT_KIDS_SETUP
 
-    const storyResponse = unwrapApiResponse<{ story?: unknown; sessionId?: string }>(
-      inputContext?.story as { data?: { success?: boolean; data?: { story?: unknown; sessionId?: string } } }
-    )
-    const scriptResponse = unwrapApiResponse<{ script?: unknown; sessionId?: string }>(
-      inputContext?.script as { data?: { success?: boolean; data?: { script?: unknown; sessionId?: string } } }
-    )
-    const anchorsStepData = inputContext?.anchors as {
-      generated?: Array<{
-        id: string
-        url: string
-        category?: 'character' | 'background'
-        label?: string
-      }>
-    } | undefined
-    const shotsResponse = unwrapApiResponse<{ shots?: unknown[] }>(
-      inputContext?.shots as { data?: { success?: boolean; data?: { shots?: unknown[] } } }
-    )
+    const storyData = unwrapStepResult(ctx.story)
+    const scriptData = unwrapStepResult(ctx.script)
+    const shotsData = unwrapStepResult(ctx.shots)
 
-    const story = storyResponse?.story
-    const script = scriptResponse?.script
-    const anchors = anchorsStepData?.generated?.map((a) => ({
+    const story = storyData?.story
+    const script = scriptData?.script
+    const anchors = ctx.anchors?.generated?.map((a) => ({
       id: a.id,
       url: a.url,
       category: a.category,
       name: a.label,
     })) || []
-    const shots = shotsResponse?.shots
+    const shots = shotsData?.shots
 
     const baseRequest = {
-      sessionId: sessionId || storyResponse?.sessionId || `session-${Date.now()}`,
+      sessionId: sessionId || storyData?.sessionId || `session-${Date.now()}`,
       projectId: projectId || undefined,
       topic: setupData.topic,
       formFactor: setupData.formFactor || 'longform',
@@ -243,10 +260,8 @@ export function GenerationReviewStep({
           })),
         }
 
-      case 'kids/shots':
-        const expandedData = unwrapApiResponse<{ expanded?: unknown[] }>(
-          inputContext?.expand as { data?: { success?: boolean; data?: { expanded?: unknown[] } } }
-        )
+      case 'kids/shots': {
+        const expandedData = unwrapStepResult(ctx.expand)
         // LLM 응답에서 shotNumber가 누락될 수 있으므로 인덱스 기반으로 보장
         const scriptForShots = script as { shots?: Array<Record<string, unknown>> } | undefined
         const sanitizedScript = scriptForShots?.shots
@@ -266,37 +281,25 @@ export function GenerationReviewStep({
           anchors,
           expanded: expandedData?.expanded || [],
         }
+      }
 
-      case 'kids/videos':
-        const currentValueShots = unwrapApiResponse<{ shots?: unknown[] }>(
-          value as { data?: { success?: boolean; data?: { shots?: unknown[] } } }
-        )?.shots
+      case 'kids/videos': {
+        const currentValueShots = unwrapStepResult(value as ApiStepResult<ShotsResponse> | null)?.shots
         return {
           ...baseRequest,
           shots: shots || currentValueShots || [],
         }
+      }
 
       case 'kids/audio': {
         // 기존 audio 응답이 있으면 existingTts, existingBgm으로 전달 (선택한 것만 재생성)
-        // 기존 데이터는 value 또는 inputContext.audio에 있을 수 있음
-        const valueData = value as unknown as Record<string, unknown> | undefined
-        const inputAudioData = inputContext?.audio as unknown as Record<string, unknown> | undefined
+        // value(현재 단계 결과) 또는 inputContext.audio에서 데이터 추출
+        const valueAudio = unwrapStepResult(value as ApiStepResult<AudioResponse> | null)
+        const ctxAudio = unwrapStepResult(ctx.audio)
+        const audioResult = valueAudio || ctxAudio
 
-        // value 또는 inputContext.audio에서 데이터 추출
-        // API 응답 구조: { data: { success: true, data: { tts, bgmTracks } } }
-        const audioSource = valueData || inputAudioData
-        let audioData = audioSource?.data as Record<string, unknown> | undefined
-        // 이중 래핑된 경우 언래핑
-        if (audioData && 'success' in audioData && 'data' in audioData) {
-          audioData = audioData.data as Record<string, unknown>
-        }
-        // audioSource 자체에 tts가 있는 경우 (직접 데이터)
-        if (!audioData?.tts && audioSource?.tts) {
-          audioData = audioSource as Record<string, unknown>
-        }
-
-        const existingTts = audioData?.tts as Array<{ id: string; shotNumber: number; audioUrl: string; duration: number }> | undefined
-        const existingBgm = audioData?.bgmTracks as Array<{ id: string; url: string; duration: number; title?: string; imageUrl?: string }> | undefined
+        const existingTts = audioResult?.tts
+        const existingBgm = audioResult?.bgmTracks
 
         console.log('[DEBUG kids/audio] regenerateMode:', regenerateMode)
         console.log('[DEBUG kids/audio] selectedForRegenerate:', Array.from(selectedForRegenerate))
@@ -355,14 +358,10 @@ export function GenerationReviewStep({
 
       case 'kids/final': {
         // videos와 audio 응답에서 데이터 추출
-        const videosData = inputContext?.videos as { data?: { success?: boolean; data?: { shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> } } } | undefined
-        const audioData = inputContext?.audio as { data?: { success?: boolean; data?: { tts?: Array<{ id: string; shotNumber: number; audioUrl: string; duration: number }>; bgmTracks?: Array<{ id: string; url: string; duration: number }> } } } | undefined
-
-        const videosResponse = videosData?.data?.data || videosData?.data as { shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> } | undefined
-        const audioResponse = audioData?.data?.data || audioData?.data as { tts?: Array<{ id: string; shotNumber: number; audioUrl: string; duration: number }>; bgmTracks?: Array<{ id: string; url: string; duration: number }> } | undefined
+        const videosResponse = unwrapStepResult(ctx.videos)
+        const audioResponse = unwrapStepResult(ctx.audio)
 
         // DEBUG: 데이터 매핑 확인
-        console.log('[DEBUG kids/final] inputContext:', inputContext)
         console.log('[DEBUG kids/final] videosResponse:', videosResponse)
         console.log('[DEBUG kids/final] audioResponse:', audioResponse)
 
@@ -392,18 +391,15 @@ export function GenerationReviewStep({
           }
         })
 
-        // 스토리 정보 추출 (썸네일 개선용)
-        const storyObj = story as { title?: string; logline?: string; synopsis?: string; characters?: Array<{ name: string; visualDescription: string }> } | undefined
-
         return {
           sessionId: baseRequest.sessionId,
           shots: mergedShots,
           bgmUrl,
           style: baseRequest.style,
           // 썸네일용 추가 데이터
-          storyTitle: storyObj?.title,
-          storyLogline: storyObj?.logline || storyObj?.synopsis,
-          characters: storyObj?.characters?.map(c => ({
+          storyTitle: story?.title,
+          storyLogline: story?.logline || story?.synopsis,
+          characters: story?.characters?.map(c => ({
             name: c.name,
             visualDescription: c.visualDescription,
           })),
@@ -449,6 +445,9 @@ export function GenerationReviewStep({
 
     // 1단계: 캐릭터 확장 (3캐릭터 × 3변형 = 9개)
     if (characterAnchors.length > 0) {
+      const charRequestBody = { ...baseRequest, anchors: characterAnchors }
+      validateRequestBody(charRequestBody, ExpandRequestSchema)
+
       setProgress((prev) => ({
         ...prev,
         current: 0,
@@ -482,6 +481,9 @@ export function GenerationReviewStep({
 
     // 2단계: 배경 확장 (3배경 × 1변형 = 3개)
     if (backgroundAnchors.length > 0) {
+      const bgRequestBody = { ...baseRequest, anchors: backgroundAnchors }
+      validateRequestBody(bgRequestBody, ExpandRequestSchema)
+
       setProgress((prev) => ({
         ...prev,
         message: `배경 확장 중... (${backgroundAnchors.length}개)`,
@@ -561,16 +563,19 @@ export function GenerationReviewStep({
       })
 
       // 단일 비디오 생성 요청
+      const videoRequestBody = {
+        sessionId: baseRequest.sessionId,
+        shot,
+        formFactor: baseRequest.formFactor,
+      }
+      validateRequestBody(videoRequestBody, VideoRequestSchema)
+
       let videoUrl = ''
       try {
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: baseRequest.sessionId,
-            shot,
-            formFactor: baseRequest.formFactor,
-          }),
+          body: JSON.stringify(videoRequestBody),
         })
 
         if (response.ok) {
@@ -738,6 +743,12 @@ export function GenerationReviewStep({
           return
         }
 
+        // 클라이언트 사전 검증 (일반 API 호출)
+        const schema = schemaMap[config.generateAction || '']
+        if (schema) {
+          validateRequestBody(requestBody, schema)
+        }
+
         // 다른 엔드포인트는 기존 방식
         setProgress((prev) => {
           const prevItems = prev.items ?? []
@@ -786,8 +797,8 @@ export function GenerationReviewStep({
   }
 
   const mockGenerate = async (total: number, items: GenerationProgressItem[]) => {
-    const setupData = (inputContext?.setup as Record<string, unknown>) || {}
-    const topic = (setupData.topic as string) || '손씻기'
+    const mockCtx = asKidsContext(inputContext)
+    const topic = mockCtx.setup?.topic || '손씻기'
 
     for (let i = 0; i < total; i++) {
       await new Promise((resolve) => setTimeout(resolve, 1500))
@@ -888,19 +899,16 @@ export function GenerationReviewStep({
     if (regeneratingItemId) return
 
     // inputContext.shots에서 원본 shot 데이터 찾기
-    const shotsResponse = unwrapApiResponse<{ shots?: Array<{ id: string; shotNumber: number; duration: number; imageUrl: string; visualPrompt: string }> }>(
-      inputContext?.shots as { data?: { success?: boolean; data?: { shots?: Array<{ id: string; shotNumber: number; duration: number; imageUrl: string; visualPrompt: string }> } } }
-    )
-    const originalShot = shotsResponse?.shots?.find(s => s.id === itemId)
+    const regenCtx = asKidsContext(inputContext)
+    const regenShotsData = unwrapStepResult(regenCtx.shots)
+    const originalShot = regenShotsData?.shots?.find(s => s.id === itemId)
     if (!originalShot) {
       setError(`원본 샷 데이터를 찾을 수 없습니다: ${itemId}`)
       return
     }
 
-    const setupData = (inputContext?.setup as Record<string, unknown>) || {}
-    const storyResponse = unwrapApiResponse<{ sessionId?: string }>(
-      inputContext?.story as { data?: { success?: boolean; data?: { sessionId?: string } } }
-    )
+    const regenSetup = regenCtx.setup ?? DEFAULT_KIDS_SETUP
+    const regenStoryData = unwrapStepResult(regenCtx.story)
 
     setRegeneratingItemId(itemId)
     setError(null)
@@ -910,9 +918,9 @@ export function GenerationReviewStep({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: sessionId || storyResponse?.sessionId || `session-${Date.now()}`,
+          sessionId: sessionId || regenStoryData?.sessionId || `session-${Date.now()}`,
           shot: originalShot,
-          formFactor: setupData.formFactor || 'longform',
+          formFactor: regenSetup.formFactor || 'longform',
         }),
       })
 

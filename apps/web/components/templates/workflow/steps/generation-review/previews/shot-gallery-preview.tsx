@@ -4,6 +4,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { Sparkles, RotateCcw, Heart, Download } from 'lucide-react'
 import type { Shot } from '../types'
+import { unwrapApiData } from '@/lib/api/kids-animation/types'
 
 interface ShotGalleryPreviewProps {
   data: unknown
@@ -51,11 +52,8 @@ export function ShotGalleryPreview({ data, onRegenerateItem, onLikeItem, onDownl
   }
 
   // Extract shots from API response format
-  let unwrapped = data as Record<string, unknown>
-  if (unwrapped && typeof unwrapped === 'object' && 'success' in unwrapped && 'data' in unwrapped) {
-    unwrapped = unwrapped.data as Record<string, unknown>
-  }
-  const shots: Shot[] = (unwrapped?.shots as Shot[]) || (Array.isArray(data) ? data as Shot[] : [])
+  const unwrapped = unwrapApiData<{ shots?: Shot[] }>(data)
+  const shots: Shot[] = unwrapped?.shots || (Array.isArray(data) ? data as Shot[] : [])
 
   return (
     <div className="w-full space-y-3">
@@ -70,6 +68,7 @@ export function ShotGalleryPreview({ data, onRegenerateItem, onLikeItem, onDownl
           >
             <div className="relative aspect-video bg-white/10">
               {shot.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={shot.imageUrl}
                   alt={`Shot ${shot.shotNumber}`}
