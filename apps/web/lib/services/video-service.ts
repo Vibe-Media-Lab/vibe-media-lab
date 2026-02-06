@@ -70,16 +70,28 @@ export async function imageToVideo(
       }
     }
 
+    const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1)
+
+    // 디버깅: 실제 API 응답 구조 로깅
+    logger.info('Video task result raw', {
+      taskId,
+      state: result.state,
+      resultJsonType: typeof result.resultJson,
+      resultJsonKeys: parsedResult ? Object.keys(parsedResult) : [],
+      resultJson: JSON.stringify(parsedResult).slice(0, 500),
+      elapsedSec,
+    })
+
     const url =
       parsedResult?.url ||
       parsedResult?.video_url ||
       (parsedResult?.urls as string[])?.[0] ||
       (parsedResult?.resultUrls as string[])?.[0]
 
-    const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1)
     logger.info('Video generation completed', {
       taskId,
       hasUrl: !!url,
+      extractedUrl: url?.slice(0, 100),
       elapsedSec,
     })
 

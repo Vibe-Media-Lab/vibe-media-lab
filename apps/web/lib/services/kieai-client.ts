@@ -178,9 +178,16 @@ export async function waitForTask(
   const { maxWaitMs = 300000, pollIntervalMs = 3000, onProgress } = options
   const startTime = Date.now()
 
+  let pollCount = 0
   while (Date.now() - startTime < maxWaitMs) {
     const result = await getTaskResult(taskId)
+    pollCount++
     onProgress?.(result.state)
+
+    if (pollCount <= 2) {
+      // 초기 폴링 결과 로깅 (디버깅용)
+      console.log(`[kieai] poll #${pollCount} taskId=${taskId} state=${result.state} resultJson=${JSON.stringify(result.resultJson).slice(0, 200)}`)
+    }
 
     if (result.state === 'success') {
       return result

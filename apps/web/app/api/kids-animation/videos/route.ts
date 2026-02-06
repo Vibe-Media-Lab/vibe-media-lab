@@ -59,6 +59,16 @@ export async function POST(request: Request) {
 
     const videoUrl = result.url || ''
 
+    if (!videoUrl) {
+      logger.warn('Video generation returned empty URL', {
+        sessionId,
+        shotId: shot.id,
+        success: result.success,
+        error: result.error,
+        metadata: result.metadata,
+      })
+    }
+
     // 성공한 비디오만 라이브러리에 저장
     if (videoUrl && userId) {
       await saveToLibrary({
