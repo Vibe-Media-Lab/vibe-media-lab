@@ -10,9 +10,10 @@ interface VideoTimelinePreviewProps {
   onRegenerateItem?: (id: string) => void
   onLikeItem?: (id: string, url: string) => void
   onDownloadItem?: (id: string, url: string) => void
+  regeneratingItemId?: string | null
 }
 
-export function VideoTimelinePreview({ data, onRegenerateItem, onLikeItem, onDownloadItem }: VideoTimelinePreviewProps) {
+export function VideoTimelinePreview({ data, onRegenerateItem, onLikeItem, onDownloadItem, regeneratingItemId }: VideoTimelinePreviewProps) {
   const [playingId, setPlayingId] = React.useState<string | null>(null)
   const [likedItems, setLikedItems] = React.useState<Set<string>>(new Set())
   const videoRefs = React.useRef<Record<string, HTMLVideoElement | null>>({})
@@ -95,7 +96,7 @@ export function VideoTimelinePreview({ data, onRegenerateItem, onLikeItem, onDow
                   <Loader2 className="h-4 w-4 animate-spin text-white/40" />
                 </div>
               )}
-              {item.url && (
+              {item.url && regeneratingItemId !== item.id && (
                 <button
                   onClick={() => handlePlayPause(item.id)}
                   className={cn(
@@ -112,6 +113,12 @@ export function VideoTimelinePreview({ data, onRegenerateItem, onLikeItem, onDow
                     <Play className="h-6 w-6 text-white" />
                   )}
                 </button>
+              )}
+              {regeneratingItemId === item.id && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60">
+                  <Loader2 className="h-6 w-6 animate-spin text-[var(--color-neon-cyan)]" />
+                  <span className="mt-1 text-[10px] text-white/80">재생성 중...</span>
+                </div>
               )}
             </div>
             <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-center text-[10px] text-white">
@@ -152,10 +159,14 @@ export function VideoTimelinePreview({ data, onRegenerateItem, onLikeItem, onDow
                     e.stopPropagation()
                     onRegenerateItem(item.id)
                   }}
-                  className="rounded-full bg-black/60 p-1 hover:bg-black/80"
+                  className={cn(
+                    'rounded-full bg-black/60 p-1 hover:bg-black/80',
+                    regeneratingItemId && 'pointer-events-none opacity-50'
+                  )}
+                  disabled={!!regeneratingItemId}
                   title="재생성"
                 >
-                  <RotateCcw className="h-2.5 w-2.5 text-white" />
+                  <RotateCcw className={cn('h-2.5 w-2.5 text-white', regeneratingItemId === item.id && 'animate-spin')} />
                 </button>
               )}
             </div>

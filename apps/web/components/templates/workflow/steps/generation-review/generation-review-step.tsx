@@ -121,6 +121,8 @@ export function GenerationReviewStep({
   // 오디오 재생성 선택 기능
   const [regenerateMode, setRegenerateMode] = React.useState(false)
   const [selectedForRegenerate, setSelectedForRegenerate] = React.useState<Set<string>>(new Set())
+  // 비디오 개별 재생성
+  const [regeneratingItemId, setRegeneratingItemId] = React.useState<string | null>(null)
 
   // Reset status when stepId changes (switching between steps)
   React.useEffect(() => {
@@ -137,6 +139,7 @@ export function GenerationReviewStep({
     setCompletedUrls({})
     setRegenerateMode(false)
     setSelectedForRegenerate(new Set())
+    setRegeneratingItemId(null)
   }, [stepId, value, config.previewType])
 
   // 재생성 항목 토글 핸들러
@@ -359,12 +362,23 @@ export function GenerationReviewStep({
           }
         })
 
+        // 스토리 정보 추출 (썸네일 개선용)
+        const storyObj = story as { title?: string; logline?: string; synopsis?: string; characters?: Array<{ name: string; visualDescription: string }> } | undefined
+
         return {
           sessionId: baseRequest.sessionId,
           shots: mergedShots,
           bgmUrl,
           style: baseRequest.style,
           songVersion: false,
+          // 썸네일용 추가 데이터
+          storyTitle: storyObj?.title,
+          storyLogline: storyObj?.logline || storyObj?.synopsis,
+          characters: storyObj?.characters?.map(c => ({
+            name: c.name,
+            visualDescription: c.visualDescription,
+          })),
+          anchorUrls: anchors.map(a => a.url).filter(Boolean),
         }
       }
 
@@ -518,25 +532,30 @@ export function GenerationReviewStep({
       })
 
       // 단일 비디오 생성 요청
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: baseRequest.sessionId,
-          shot,
-          formFactor: baseRequest.formFactor,
-        }),
-      })
+      let videoUrl = ''
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: baseRequest.sessionId,
+            shot,
+            formFactor: baseRequest.formFactor,
+          }),
+        })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Shot ${i + 1} 생성 실패: ${response.status}`)
+        if (response.ok) {
+          const result = await response.json()
+          videoUrl = result.data?.videoUrl || ''
+        } else {
+          const errorData = await response.json().catch(() => ({}))
+          console.error(`[Video] Shot ${i + 1} API 에러:`, errorData.error || response.status)
+        }
+      } catch (fetchError) {
+        console.error(`[Video] Shot ${i + 1} 네트워크 에러:`, fetchError)
       }
 
-      const result = await response.json()
-      const videoUrl = result.data?.videoUrl || ''
-
-      // 결과 저장
+      // 결과 저장 (성공/실패 모두)
       results.push({
         id: shot.id,
         shotNumber: shot.shotNumber,
@@ -568,13 +587,15 @@ export function GenerationReviewStep({
           current: i + 1,
           message: videoUrl
             ? `비디오 ${i + 1}/${shots.length} 완료`
-            : `비디오 ${i + 1}/${shots.length} 실패`,
+            : `비디오 ${i + 1}/${shots.length} 실패 - 계속 진행`,
           items: updatedItems,
         }
       })
     }
 
     // 전체 완료
+    const failedCount = results.filter(r => !r.videoUrl).length
+
     onChange({
       data: {
         success: true,
@@ -585,6 +606,10 @@ export function GenerationReviewStep({
       },
       generatedAt: new Date(),
     })
+
+    if (failedCount > 0) {
+      setError(`${shots.length}개 중 ${failedCount}개 비디오 생성 실패 - 재생성으로 다시 시도하세요`)
+    }
     setStatus('reviewing')
   }
 
@@ -826,8 +851,94 @@ export function GenerationReviewStep({
   }
 
   const handleRegenerateItem = async (itemId: string) => {
-    // TODO: Implement individual item regeneration
-    console.log('Regenerate item:', itemId)
+    // 비디오 개별 재생성만 지원
+    if (config.generateAction !== 'kids/videos') return
+
+    // 이미 재생성 중이면 중복 요청 방지
+    if (regeneratingItemId) return
+
+    // inputContext.shots에서 원본 shot 데이터 찾기
+    const shotsResponse = unwrapApiResponse<{ shots?: Array<{ id: string; shotNumber: number; duration: number; imageUrl: string; visualPrompt: string }> }>(
+      inputContext?.shots as { data?: { success?: boolean; data?: { shots?: Array<{ id: string; shotNumber: number; duration: number; imageUrl: string; visualPrompt: string }> } } }
+    )
+    const originalShot = shotsResponse?.shots?.find(s => s.id === itemId)
+    if (!originalShot) {
+      setError(`원본 샷 데이터를 찾을 수 없습니다: ${itemId}`)
+      return
+    }
+
+    const setupData = (inputContext?.setup as Record<string, unknown>) || {}
+    const storyResponse = unwrapApiResponse<{ sessionId?: string }>(
+      inputContext?.story as { data?: { success?: boolean; data?: { sessionId?: string } } }
+    )
+
+    setRegeneratingItemId(itemId)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/kids-animation/videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: sessionId || storyResponse?.sessionId || `session-${Date.now()}`,
+          shot: originalShot,
+          formFactor: setupData.formFactor || 'longform',
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `비디오 재생성 실패: ${response.status}`)
+      }
+
+      const result = await response.json()
+      const newVideoUrl = result.data?.videoUrl || ''
+
+      if (!newVideoUrl) {
+        throw new Error('비디오 URL이 반환되지 않았습니다')
+      }
+
+      // value.data에서 해당 shot의 videoUrl만 immutable update
+      if (value) {
+        const currentData = value.data as { success?: boolean; data?: { sessionId?: string; shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> } }
+        const innerData = currentData?.data || currentData as unknown as { sessionId?: string; shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> }
+
+        const currentShots = innerData?.shots
+        if (!currentShots || currentShots.length === 0) {
+          throw new Error('비디오 데이터가 존재하지 않습니다')
+        }
+
+        const updatedShots = currentShots.map(shot =>
+          shot.id === itemId ? { ...shot, videoUrl: newVideoUrl } : shot
+        )
+
+        // 원래 데이터 구조를 유지하며 업데이트
+        if (currentData?.success !== undefined && currentData?.data) {
+          onChange({
+            ...value,
+            data: {
+              ...currentData,
+              data: {
+                ...currentData.data,
+                shots: updatedShots,
+              },
+            },
+          })
+        } else {
+          onChange({
+            ...value,
+            data: {
+              ...currentData,
+              shots: updatedShots,
+            },
+          })
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '비디오 재생성에 실패했습니다')
+    } finally {
+      setRegeneratingItemId(null)
+    }
   }
 
   const handleLikeItem = async (itemId: string, url: string) => {
@@ -917,6 +1028,12 @@ export function GenerationReviewStep({
         {/* Reviewing State */}
         {status === 'reviewing' && value && (
           <div className="w-full space-y-4">
+            {error && (
+              <div className="flex items-center gap-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 px-4 py-3 text-sm text-yellow-400">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {error}
+              </div>
+            )}
             <Preview
               type={config.previewType}
               data={value.data}
@@ -931,6 +1048,8 @@ export function GenerationReviewStep({
               regenerateMode={regenerateMode}
               selectedForRegenerate={selectedForRegenerate}
               onToggleRegenerate={handleToggleRegenerate}
+              // 비디오 개별 재생성
+              regeneratingItemId={regeneratingItemId}
             />
 
             <div className="flex justify-center gap-3 pt-4">

@@ -155,4 +155,6 @@ export interface PreviewProps {
   regenerateMode?: boolean
   selectedForRegenerate?: Set<string>
   onToggleRegenerate?: (id: string, isBgm: boolean) => void
+  // 비디오 개별 재생성
+  regeneratingItemId?: string | null
 }

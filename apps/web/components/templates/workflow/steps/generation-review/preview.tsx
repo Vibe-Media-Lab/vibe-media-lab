@@ -120,6 +120,7 @@ export function Preview({
   regenerateMode,
   selectedForRegenerate,
   onToggleRegenerate,
+  regeneratingItemId,
 }: PreviewProps) {
   switch (type) {
     case 'text':
@@ -159,6 +160,7 @@ export function Preview({
           onRegenerateItem={onRegenerateItem}
           onLikeItem={onLikeItem}
           onDownloadItem={onDownloadItem}
+          regeneratingItemId={regeneratingItemId}
         />
       )
     case 'video-player': {
