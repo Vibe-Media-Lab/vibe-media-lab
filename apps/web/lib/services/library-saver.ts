@@ -22,6 +22,8 @@ function getSupabaseAdmin() {
   })
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export type MediaType = 'image' | 'video' | 'tts' | 'bgm'
 
 export interface SaveToLibraryParams {
@@ -54,6 +56,10 @@ export async function saveToLibrary(params: SaveToLibraryParams): Promise<SaveTo
   if (!supabase) {
     console.warn('[Library Saver] Supabase not configured, skipping save')
     return { success: false, error: 'Supabase not configured' }
+  }
+
+  if (!UUID_REGEX.test(params.userId)) {
+    return { success: false, error: 'Invalid userId format' }
   }
 
   console.log('[Library Saver] Saving to library:', {

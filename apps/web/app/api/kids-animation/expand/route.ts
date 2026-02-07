@@ -141,7 +141,8 @@ export const POST = createApiHandler<ExpandResponse>(
         failed: failedCount,
       },
     }
-  }
+  },
+  { rateLimit: { maxRequests: 10, windowMs: 60_000 } }
 )
 
 // 앵커 확장은 여러 이미지를 순차적으로 생성하므로 긴 시간 필요

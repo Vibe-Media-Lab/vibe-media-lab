@@ -9,6 +9,7 @@ import ffmpeg from 'fluent-ffmpeg'
 import ffmpegPath from 'ffmpeg-static'
 import { Readable, PassThrough } from 'stream'
 import { getLogger } from '@/lib/logger'
+import { validateFetchUrl } from '@/lib/security/validate-url'
 
 const logger = getLogger('video-trim-service')
 
@@ -33,6 +34,7 @@ export interface TrimVideoResult {
  * Download video from URL as a readable stream
  */
 async function downloadVideoAsStream(url: string): Promise<Readable> {
+  validateFetchUrl(url, { endpoint: 'video-trim-service/downloadVideoAsStream' })
   const response = await fetch(url)
 
   if (!response.ok) {

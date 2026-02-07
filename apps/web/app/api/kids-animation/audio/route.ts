@@ -161,7 +161,8 @@ export const POST = createApiHandler<AudioResponse>(
       tts: ttsResults,
       bgmTracks,
     }
-  }
+  },
+  { rateLimit: { maxRequests: 5, windowMs: 60_000 } }
 )
 
 // TTS + BGM 생성은 시간이 오래 걸림

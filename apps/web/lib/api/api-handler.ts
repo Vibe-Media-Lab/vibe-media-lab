@@ -8,8 +8,10 @@ import {
   errorResponse,
   type ApiSuccessResponse,
 } from '@vibe-media-lab/shared'
+import { RateLimiter } from '@vibe-media-lab/media-router'
 import type { User } from '@supabase/supabase-js'
 import { getRequestContext, type RequestContext } from './request-context'
+import { logSecurityEvent } from '@/lib/security/security-logger'
 
 export interface ApiHandlerContext extends RequestContext {
   user: User
@@ -22,6 +24,19 @@ export type ApiHandlerFn<T> = (
 
 export interface CreateApiHandlerOptions {
   requireAuth?: boolean
+  rateLimit?: { maxRequests: number; windowMs: number }
+}
+
+// 모듈 레벨 limiter 캐시 (action별 인스턴스)
+const rateLimiters = new Map<string, RateLimiter>()
+
+function getRateLimiter(key: string, config: { maxRequests: number; windowMs: number }): RateLimiter {
+  let limiter = rateLimiters.get(key)
+  if (!limiter) {
+    limiter = new RateLimiter(config)
+    rateLimiters.set(key, limiter)
+  }
+  return limiter
 }
 
 export function createApiHandler<T>(
@@ -39,11 +54,43 @@ export function createApiHandler<T>(
         const { data: { user }, error: authError } = await supabase.auth.getUser()
 
         if (authError || !user) {
+          logSecurityEvent({
+            type: 'auth_failure',
+            ip: requestContext.ip,
+            endpoint: request.nextUrl.pathname,
+          })
           const error = ApiError.unauthorized()
           return NextResponse.json(
             errorResponse(error, { requestId }),
             { status: error.statusCode }
           )
+        }
+
+        // Rate limiting (user.id 기반)
+        if (options.rateLimit) {
+          const endpoint = request.nextUrl.pathname
+          const limiter = getRateLimiter(endpoint, options.rateLimit)
+          const result = limiter.check(user.id)
+
+          if (!result.allowed) {
+            logSecurityEvent({
+              type: 'rate_limited',
+              userId: user.id,
+              ip: requestContext.ip,
+              endpoint,
+              details: { retryAfterMs: result.retryAfterMs },
+            })
+            const error = ApiError.rateLimited()
+            const headers: Record<string, string> = {
+              'Retry-After': String(Math.ceil((result.retryAfterMs || 60000) / 1000)),
+              'X-RateLimit-Remaining': '0',
+              'X-RateLimit-Reset': String(Math.ceil(result.resetTime / 1000)),
+            }
+            return NextResponse.json(
+              errorResponse(error, { requestId }),
+              { status: error.statusCode, headers }
+            )
+          }
         }
 
         const result = await handler(request, {

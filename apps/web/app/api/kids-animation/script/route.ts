@@ -149,5 +149,6 @@ export const POST = createApiHandler<ScriptResponse>(
       script,
       anchorPrompts,
     }
-  }
+  },
+  { rateLimit: { maxRequests: 10, windowMs: 60_000 } }
 )

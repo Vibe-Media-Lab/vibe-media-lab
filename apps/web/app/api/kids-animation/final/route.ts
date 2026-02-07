@@ -190,7 +190,8 @@ export const POST = createApiHandler<FinalResponse>(
     })
 
     return result
-  }
+  },
+  { rateLimit: { maxRequests: 5, windowMs: 60_000 } }
 )
 
 // BGM processing + video composition can take a while

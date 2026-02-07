@@ -9,6 +9,17 @@ import { createClient } from '@supabase/supabase-js'
 
 const BUCKET_NAME = 'media-assets'
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function validateUserId(userId: string): void {
+  if (!UUID_REGEX.test(userId)) {
+    throw new Error(`Invalid userId format: expected UUID`)
+  }
+  if (userId.includes('..') || userId.includes('/')) {
+    throw new Error(`Invalid userId: path traversal detected`)
+  }
+}
+
 /**
  * Create Supabase Admin Client with Service Role Key
  * This bypasses RLS policies for server-side operations
@@ -85,6 +96,7 @@ export async function uploadMedia(
     const supabase = createAdminClient()
     const { file, userId, mediaType, filename, contentType } = params
 
+    validateUserId(userId)
     const generatedFilename = generateFilename(filename, contentType)
     const path = `${userId}/${mediaType}/${generatedFilename}`
 

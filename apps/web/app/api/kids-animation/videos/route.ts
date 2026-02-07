@@ -2,7 +2,7 @@ import { KIDS_FORM_FACTOR_PRESETS } from '@vibe-media-lab/shared'
 import { imageToVideo, saveToLibrary } from '@/lib/services'
 import { VideoRequestSchema } from '@/lib/api/kids-animation/types'
 import { getLogger } from '@/lib/logger'
-import { createClient } from '@/lib/supabase/server'
+import { createApiHandler } from '@/lib/api'
 
 const logger = getLogger('kids-animation/videos')
 
@@ -18,23 +18,8 @@ export const maxDuration = 300
  * - 클라이언트에서 순차적으로 호출
  * - 샷당 약 2-5분 소요
  */
-export async function POST(request: Request) {
-  try {
-    // 인증 확인
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    // 요청 파싱
+export const POST = createApiHandler(
+  async (request, { user }) => {
     const body = await request.json()
     const validated = VideoRequestSchema.parse(body)
 
@@ -57,7 +42,7 @@ export async function POST(request: Request) {
       aspectRatio: formFactorPreset.video.aspectRatio,
     })
 
-    // 생성 실패 시 에러 반환
+    // 생성 실패 시 에러 데이터 반환 (200 — 클라이언트가 처리)
     if (!result.success) {
       logger.error('Video generation failed', {
         sessionId,
@@ -65,21 +50,12 @@ export async function POST(request: Request) {
         error: result.error,
       })
 
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: result.error || '비디오 생성 실패',
-          data: {
-            id: shot.id,
-            shotNumber: shot.shotNumber,
-            videoUrl: '',
-          },
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      )
+      return {
+        id: shot.id,
+        shotNumber: shot.shotNumber,
+        videoUrl: '',
+        error: result.error || '비디오 생성 실패',
+      }
     }
 
     const videoUrl = result.url || ''
@@ -119,34 +95,11 @@ export async function POST(request: Request) {
       hasUrl: !!videoUrl,
     })
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        data: {
-          id: shot.id,
-          shotNumber: shot.shotNumber,
-          videoUrl,
-        },
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    )
-  } catch (error) {
-    logger.error('Video generation error', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-    })
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error instanceof Error ? error.message : '비디오 생성 실패',
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    )
-  }
-}
+    return {
+      id: shot.id,
+      shotNumber: shot.shotNumber,
+      videoUrl,
+    }
+  },
+  { rateLimit: { maxRequests: 5, windowMs: 60_000 } }
+)

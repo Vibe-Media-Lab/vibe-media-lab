@@ -8,6 +8,7 @@
  */
 
 import { getLogger } from '@/lib/logger'
+import { validateFetchUrl } from '@/lib/security/validate-url'
 
 const logger = getLogger('gemini-image-client')
 
@@ -305,7 +306,8 @@ export async function urlToBase64(
     }
   }
 
-  // Handle remote URLs
+  // Handle remote URLs — SSRF 방어
+  validateFetchUrl(url, { endpoint: 'gemini-image-client/urlToBase64' })
   const response = await fetch(url)
 
   if (!response.ok) {

@@ -32,5 +32,6 @@ export const POST = createApiHandler<StoryResponse>(
       sessionId,
       story,
     }
-  }
+  },
+  { rateLimit: { maxRequests: 10, windowMs: 60_000 } }
 )

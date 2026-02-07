@@ -63,7 +63,8 @@ export const POST = createApiHandler<ShotsResponse>(
       sessionId,
       shots,
     }
-  }
+  },
+  { rateLimit: { maxRequests: 10, windowMs: 60_000 } }
 )
 
 // 샷 이미지 생성은 시간이 오래 걸림
