@@ -82,16 +82,27 @@ export function AssetCard({ asset, onFavoriteToggle, onDelete }: AssetCardProps)
     onDelete?.(asset.id, asset.project_id != null)
   }
 
-  const handleDownload = (e: React.MouseEvent) => {
+  const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     if (!asset.output_url) return
 
-    const link = document.createElement('a')
-    link.href = asset.output_url
-    const ext = isVideo ? 'mp4' : isAudio ? 'mp3' : 'png'
-    link.download = `vibe-${asset.media_type}-${Date.now()}.${ext}`
-    link.click()
+    try {
+      const response = await fetch(asset.output_url)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      const ext = isVideo ? 'mp4' : isAudio ? 'mp3' : 'png'
+      link.download = `vibe-${asset.media_type}-${Date.now()}.${ext}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(blobUrl)
+    } catch {
+      // Fallback: open in new tab
+      window.open(asset.output_url, '_blank')
+    }
   }
 
   const handleVideoPlayPause = (e: React.MouseEvent) => {
@@ -492,14 +503,25 @@ export function AudioAssetCard({ asset, onFavoriteToggle, onDelete }: AssetCardP
     onDelete?.(asset.id, asset.project_id != null)
   }
 
-  const handleDownload = (e: React.MouseEvent) => {
+  const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     if (!asset.output_url) return
-    const link = document.createElement('a')
-    link.href = asset.output_url
-    link.download = `vibe-${asset.media_type}-${Date.now()}.mp3`
-    link.click()
+
+    try {
+      const response = await fetch(asset.output_url)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = `vibe-${asset.media_type}-${Date.now()}.mp3`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(blobUrl)
+    } catch {
+      window.open(asset.output_url, '_blank')
+    }
   }
 
   React.useEffect(() => {

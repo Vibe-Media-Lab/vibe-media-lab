@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { Upload, Copy, Check, AlertCircle, Loader2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
+import { Upload, Copy, Check, AlertCircle, Loader2, RefreshCw, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { GenerationResult } from './types'
 
@@ -183,7 +183,7 @@ export function ManualVideoUpload({ shots, sessionId, onComplete }: ManualVideoU
               )}
             >
               {/* 이미지 + 뱃지 */}
-              <div className="relative mb-2 aspect-video overflow-hidden rounded-md bg-black/30">
+              <div className="group/img relative mb-2 aspect-video overflow-hidden rounded-md bg-black/30">
                 {shot.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- 외부 URL 이미지 (Supabase Storage)
                   <img
@@ -204,6 +204,30 @@ export function ManualVideoUpload({ shots, sessionId, onComplete }: ManualVideoU
                     {shot.duration}초
                   </span>
                 </div>
+                {shot.imageUrl && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(shot.imageUrl)
+                        const blob = await res.blob()
+                        const blobUrl = URL.createObjectURL(blob)
+                        const link = document.createElement('a')
+                        link.href = blobUrl
+                        link.download = `shot-${shot.shotNumber}.png`
+                        document.body.appendChild(link)
+                        link.click()
+                        document.body.removeChild(link)
+                        URL.revokeObjectURL(blobUrl)
+                      } catch {
+                        window.open(shot.imageUrl, '_blank')
+                      }
+                    }}
+                    className="absolute right-1.5 top-1.5 rounded bg-black/60 p-1 text-white/70 opacity-0 transition-opacity hover:bg-black/80 hover:text-white group-hover/img:opacity-100"
+                    title="이미지 다운로드"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
 
               {/* 프롬프트 */}
