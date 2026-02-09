@@ -38,6 +38,9 @@ import type {
 } from './types'
 import { GeneratingPreview } from './generating-preview'
 import { Preview } from './preview'
+import { ManualVideoUpload } from './manual-video-upload'
+import { ManualAudioUpload } from './manual-audio-upload'
+import { useGenerationMode } from './use-generation-mode'
 
 // API 에러 응답에서 메시지 추출
 function extractErrorMessage(errorData: Record<string, unknown>, fallback: string): string {
@@ -160,6 +163,8 @@ export function GenerationReviewStep({
   projectId,
 }: GenerationReviewStepProps) {
   const hasValidData = hasValidGeneratedData(value, config.previewType)
+  const [generationMode, setGenerationMode] = useGenerationMode(config.generateAction || '')
+  const isManualMode = (config.generateAction === 'kids/videos' || config.generateAction === 'kids/audio') && generationMode === 'manual'
 
   const [status, setStatus] = React.useState<StepStatus>(
     hasValidData ? 'reviewing' : 'idle'
@@ -905,10 +910,18 @@ export function GenerationReviewStep({
     // 이미 재생성 중이면 중복 요청 방지
     if (regeneratingItemId) return
 
-    // inputContext.shots에서 원본 shot 데이터 찾기
+    // 현재 단계(value)에서 먼저 찾고, 없으면 inputContext.shots에서 fallback
     const regenCtx = asKidsContext(inputContext)
     const regenShotsData = unwrapStepResult(regenCtx.shots)
-    const originalShot = regenShotsData?.shots?.find(s => s.id === itemId)
+
+    // value에서 현재 단계 shot 데이터 추출 (사용자 편집 반영)
+    const currentValueData = value?.data as { shots?: Array<{ id: string; shotNumber: number; videoUrl: string; visualPrompt?: string; imageUrl?: string; duration?: number }> } | undefined
+    const currentShot = currentValueData?.shots?.find(s => s.id === itemId)
+    const fallbackShot = regenShotsData?.shots?.find(s => s.id === itemId)
+    const originalShot = currentShot
+      ? { ...fallbackShot, ...currentShot }
+      : fallbackShot
+
     if (!originalShot) {
       setError(`원본 샷 데이터를 찾을 수 없습니다: ${itemId}`)
       return
@@ -1047,22 +1060,105 @@ export function GenerationReviewStep({
         {/* Idle State */}
         {status === 'idle' && (
           <>
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-neon-pink)]/20 to-[var(--color-neon-cyan)]/20">
-              <Sparkles className="h-8 w-8 text-[var(--color-neon-pink)]" />
-            </div>
-            <div className="text-center">
-              <p className="font-medium text-white">AI 생성 준비</p>
-              <p className="mt-1 text-sm text-white/60">
-                버튼을 클릭하면 AI가 콘텐츠를 생성합니다
-              </p>
-            </div>
-            <Button
-              onClick={handleGenerate}
-              className="bg-gradient-to-r from-[var(--color-neon-pink)] to-[var(--color-neon-purple)] transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-[var(--color-neon-pink)]/30"
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              생성 시작
-            </Button>
+            {/* 모드 토글 - 비디오/오디오 단계에서만 */}
+            {(config.generateAction === 'kids/videos' || config.generateAction === 'kids/audio') && (
+              <div className="flex w-full items-center justify-end gap-2 pb-2">
+                <span className="text-xs text-white/50">모드:</span>
+                <div className="flex rounded-md border border-white/20 p-0.5">
+                  <button
+                    onClick={() => setGenerationMode('auto')}
+                    className={cn(
+                      'rounded px-3 py-1 text-xs transition-colors',
+                      generationMode === 'auto'
+                        ? 'bg-[var(--color-neon-cyan)]/20 text-[var(--color-neon-cyan)]'
+                        : 'text-white/40 hover:text-white/60'
+                    )}
+                  >
+                    자동 생성
+                  </button>
+                  <button
+                    onClick={() => setGenerationMode('manual')}
+                    className={cn(
+                      'rounded px-3 py-1 text-xs transition-colors',
+                      generationMode === 'manual'
+                        ? 'bg-[var(--color-neon-pink)]/20 text-[var(--color-neon-pink)]'
+                        : 'text-white/40 hover:text-white/60'
+                    )}
+                  >
+                    수동 업로드
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isManualMode ? (
+              config.generateAction === 'kids/videos' ? (
+                <ManualVideoUpload
+                  shots={(() => {
+                    const ctx = asKidsContext(inputContext)
+                    const shotsData = unwrapStepResult(ctx.shots)
+                    return (shotsData?.shots || []).map(s => ({
+                      id: s.id,
+                      shotNumber: s.shotNumber,
+                      duration: s.duration || 10,
+                      imageUrl: s.imageUrl || '',
+                      visualPrompt: s.visualPrompt || '',
+                    }))
+                  })()}
+                  sessionId={sessionId || `session-${Date.now()}`}
+                  onComplete={(result) => {
+                    onChange(result)
+                    setStatus('reviewing')
+                  }}
+                />
+              ) : (
+                <ManualAudioUpload
+                  shots={(() => {
+                    const ctx = asKidsContext(inputContext)
+                    const scriptData = unwrapStepResult(ctx.script)
+                    const shotsData = unwrapStepResult(ctx.shots)
+                    const scriptShots = (scriptData?.script as { shots?: Array<{ id: string; shotNumber: number; narration: string }> })?.shots
+                    return (scriptShots || shotsData?.shots || []).map(s => ({
+                      id: s.id,
+                      shotNumber: s.shotNumber,
+                      narration: s.narration || '',
+                    }))
+                  })()}
+                  bgmPrompt={(() => {
+                    const ctx = asKidsContext(inputContext)
+                    const storyData = unwrapStepResult(ctx.story)
+                    const scriptData = unwrapStepResult(ctx.script)
+                    const bgmDirection = (storyData?.story as { bgmDirection?: string })?.bgmDirection
+                    const bgmPrompt = (scriptData?.script as { bgmPrompt?: string })?.bgmPrompt
+                    return bgmDirection || bgmPrompt || ''
+                  })()}
+                  sessionId={sessionId || `session-${Date.now()}`}
+                  onComplete={(result) => {
+                    onChange(result)
+                    setStatus('reviewing')
+                  }}
+                />
+              )
+            ) : (
+              <>
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-neon-pink)]/20 to-[var(--color-neon-cyan)]/20">
+                  <Sparkles className="h-8 w-8 text-[var(--color-neon-pink)]" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium text-white">AI 생성 준비</p>
+                  <p className="mt-1 text-sm text-white/60">
+                    버튼을 클릭하면 AI가 콘텐츠를 생성합니다
+                  </p>
+                </div>
+                <Button
+                  onClick={handleGenerate}
+                  className="bg-gradient-to-r from-[var(--color-neon-pink)] to-[var(--color-neon-purple)] transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-[var(--color-neon-pink)]/30"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  생성 시작
+                </Button>
+              </>
+            )}
           </>
         )}
 
@@ -1103,53 +1199,78 @@ export function GenerationReviewStep({
             />
 
             <div className="flex justify-center gap-3 pt-4">
-              {/* 오디오 단계에서만 선택 재생성 버튼 표시 */}
-              {config.previewType === 'audio-player' && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (regenerateMode) {
-                      // 재생성 모드 종료 시 선택 초기화
-                      setSelectedForRegenerate(new Set())
-                    }
-                    setRegenerateMode(!regenerateMode)
-                  }}
-                  className={cn(
-                    'border-white/30 bg-transparent hover:bg-white/10',
-                    regenerateMode
-                      ? 'text-[var(--color-neon-cyan)] border-[var(--color-neon-cyan)]'
-                      : 'text-white'
+              {isManualMode ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      onChange(null)
+                      setStatus('idle')
+                    }}
+                    className="border-white/30 bg-transparent text-white hover:bg-white/10"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    교체하기
+                  </Button>
+                  <Button
+                    onClick={handleApprove}
+                    className="bg-gradient-to-r from-[var(--color-neon-lime)] to-[var(--color-neon-cyan)]"
+                  >
+                    다음 단계
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {/* 오디오 단계에서만 선택 재생성 버튼 표시 */}
+                  {config.previewType === 'audio-player' && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (regenerateMode) {
+                          // 재생성 모드 종료 시 선택 초기화
+                          setSelectedForRegenerate(new Set())
+                        }
+                        setRegenerateMode(!regenerateMode)
+                      }}
+                      className={cn(
+                        'border-white/30 bg-transparent hover:bg-white/10',
+                        regenerateMode
+                          ? 'text-[var(--color-neon-cyan)] border-[var(--color-neon-cyan)]'
+                          : 'text-white'
+                      )}
+                    >
+                      {regenerateMode ? '선택 취소' : '선택 재생성'}
+                    </Button>
                   )}
-                >
-                  {regenerateMode ? '선택 취소' : '선택 재생성'}
-                </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      // 재생성 모드일 때는 선택된 항목만 재생성
+                      if (regenerateMode && selectedForRegenerate.size > 0) {
+                        handleRegenerate()
+                        setRegenerateMode(false)
+                      } else {
+                        handleRegenerate()
+                      }
+                    }}
+                    className="border-white/30 bg-transparent text-white hover:bg-white/10"
+                    disabled={regenerateMode && selectedForRegenerate.size === 0}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    {regenerateMode && selectedForRegenerate.size > 0
+                      ? `선택 항목 재생성 (${selectedForRegenerate.size}개)`
+                      : '전체 재생성'}
+                  </Button>
+                  <Button
+                    onClick={handleApprove}
+                    className="bg-gradient-to-r from-[var(--color-neon-lime)] to-[var(--color-neon-cyan)]"
+                  >
+                    다음 단계
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </>
               )}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  // 재생성 모드일 때는 선택된 항목만 재생성
-                  if (regenerateMode && selectedForRegenerate.size > 0) {
-                    handleRegenerate()
-                    setRegenerateMode(false)
-                  } else {
-                    handleRegenerate()
-                  }
-                }}
-                className="border-white/30 bg-transparent text-white hover:bg-white/10"
-                disabled={regenerateMode && selectedForRegenerate.size === 0}
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                {regenerateMode && selectedForRegenerate.size > 0
-                  ? `선택 항목 재생성 (${selectedForRegenerate.size}개)`
-                  : '전체 재생성'}
-              </Button>
-              <Button
-                onClick={handleApprove}
-                className="bg-gradient-to-r from-[var(--color-neon-lime)] to-[var(--color-neon-cyan)]"
-              >
-                다음 단계
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
             </div>
           </div>
         )}
