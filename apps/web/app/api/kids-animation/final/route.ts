@@ -73,7 +73,7 @@ export const POST = createApiHandler<FinalResponse>(
         bgmUrl,
         targetDurationSec: expectedDurationSec,
         fadeOutSec: 2, // 끝 2초 페이드아웃
-        volume: 0.25, // 25% 볼륨 - 나레이션보다 낮게
+        volume: 0.125, // 12.5% 볼륨 - 나레이션보다 낮게
       })
 
       if (bgmResult.success && bgmResult.audioBuffer) {
@@ -118,7 +118,7 @@ export const POST = createApiHandler<FinalResponse>(
         audioUrl: shot.audioUrl,
       })),
       bgmUrl: processedBgmUrl,
-      bgmVolume: 0.3, // 30% volume for BGM
+      bgmVolume: 0.15, // 15% volume for BGM
       userId: user?.id,
       metadata: {
         style,
