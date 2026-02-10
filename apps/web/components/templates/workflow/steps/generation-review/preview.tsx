@@ -141,6 +141,7 @@ export function Preview({
           onRegenerateItem={onRegenerateItem}
           onLikeItem={onLikeItem}
           onDownloadItem={onDownloadItem}
+          regeneratingItemId={regeneratingItemId}
         />
       )
     case 'video-timeline':
