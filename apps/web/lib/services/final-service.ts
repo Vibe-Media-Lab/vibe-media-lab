@@ -19,6 +19,7 @@ import {
 } from './fal-client'
 import { generateImage, editImage } from './image-service'
 import { saveToLibrary } from './library-saver'
+import { uploadMedia } from './supabase-storage'
 import { getLogger } from '@/lib/logger'
 import type {
   ComposeVideoParams,
@@ -188,9 +189,41 @@ async function composeVideoWithFal(
       duration: totalDurationSec,
     })
 
+    // fal.ai URL은 임시 → Supabase Storage에 재업로드하여 영구 URL 확보
+    let permanentVideoUrl = result.video_url
+    if (params.userId && result.video_url) {
+      try {
+        const videoResponse = await fetch(result.video_url)
+        const videoBuffer = Buffer.from(await videoResponse.arrayBuffer())
+
+        const uploadResult = await uploadMedia({
+          file: videoBuffer,
+          userId: params.userId,
+          mediaType: 'video',
+          filename: `final-${params.sessionId || Date.now()}.mp4`,
+          contentType: 'video/mp4',
+        })
+
+        if (uploadResult.success && uploadResult.url) {
+          permanentVideoUrl = uploadResult.url
+          logger.info('Final video uploaded to permanent storage', {
+            permanentUrl: permanentVideoUrl.slice(0, 80),
+          })
+        } else {
+          logger.warn('Failed to upload final video to storage, using fal.ai URL', {
+            error: uploadResult.error,
+          })
+        }
+      } catch (uploadErr) {
+        logger.warn('Failed to re-upload final video', {
+          error: uploadErr instanceof Error ? uploadErr.message : String(uploadErr),
+        })
+      }
+    }
+
     return {
       success: true,
-      videoUrl: result.video_url,
+      videoUrl: permanentVideoUrl,
       duration: totalDurationSec,
       renderId: `fal-${Date.now()}`,
     }
