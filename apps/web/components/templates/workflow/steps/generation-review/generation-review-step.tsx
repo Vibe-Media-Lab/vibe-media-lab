@@ -783,6 +783,12 @@ export function GenerationReviewStep({
           }
         })
 
+        if (config.generateAction === 'kids/shots') {
+          const batchAnchors = (requestBody.anchors as Array<{ url: string }>) || []
+          console.log('[DEBUG Batch Shots] anchorUrls:', batchAnchors.map(a => a.url))
+          console.log('[DEBUG Batch Shots] shotCount:', ((requestBody.script as { shots?: unknown[] })?.shots || []).length)
+        }
+
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -939,18 +945,21 @@ export function GenerationReviewStep({
         const anchorsStepData = regenCtx.anchors
         const anchorUrls: string[] = (anchorsStepData?.generated || []).map(a => a.url).filter(Boolean)
 
+        const regenRequestBody = {
+          sessionId: sessionId || regenStoryData?.sessionId || `session-${Date.now()}`,
+          projectId,
+          shotId: itemId,
+          visualPrompt: targetShot.visualPrompt,
+          anchorUrls,
+          style: regenSetup.style || 'pixar',
+          formFactor: regenSetup.formFactor || 'longform',
+        }
+        console.log('[DEBUG Regenerate] request:', JSON.stringify(regenRequestBody, null, 2))
+
         const response = await fetch('/api/kids-animation/shots/regenerate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: sessionId || regenStoryData?.sessionId || `session-${Date.now()}`,
-            projectId,
-            shotId: itemId,
-            visualPrompt: targetShot.visualPrompt,
-            anchorUrls,
-            style: regenSetup.style || 'pixar',
-            formFactor: regenSetup.formFactor || 'longform',
-          }),
+          body: JSON.stringify(regenRequestBody),
         })
 
         if (!response.ok) {
