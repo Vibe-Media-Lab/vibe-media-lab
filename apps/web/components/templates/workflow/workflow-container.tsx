@@ -161,16 +161,21 @@ export function WorkflowContainer({ template }: WorkflowContainerProps) {
   }
 
   const handleGenerate = async () => {
-    startGeneration()
+    // final 단계 stepData에서 videoUrl 추출 시도
+    // 저장 구조: { data: { success: true, data: { videoUrl, ... } }, generatedAt }
+    const finalStepData = stepData['final'] as {
+      data?: { success?: boolean; data?: { videoUrl?: string } }
+    } | undefined
+    const videoUrl = finalStepData?.data?.data?.videoUrl
 
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 3000))
-
-      setOutputUrl('/templates/brainrot.mp4')
+    if (videoUrl) {
+      setOutputUrl(videoUrl)
       setCompleted()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Generation failed')
+      return
     }
+
+    // final 데이터가 없으면 에러
+    setError('최종 영상이 아직 생성되지 않았습니다. 최종 편집 단계에서 먼저 영상을 생성해주세요.')
   }
 
   const handleReset = () => {

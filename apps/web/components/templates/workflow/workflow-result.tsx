@@ -27,12 +27,22 @@ export function WorkflowResult({
   onReset,
   onGenerate,
 }: WorkflowResultProps) {
-  const handleDownload = () => {
-    if (outputUrl) {
+  const handleDownload = async () => {
+    if (!outputUrl) return
+    try {
+      const response = await fetch(outputUrl)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
       const link = document.createElement('a')
-      link.href = outputUrl
+      link.href = blobUrl
       link.download = `vibe-output-${Date.now()}.mp4`
+      document.body.appendChild(link)
       link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(blobUrl)
+    } catch {
+      // fetch 실패 시 직접 링크 열기
+      window.open(outputUrl, '_blank')
     }
   }
 
