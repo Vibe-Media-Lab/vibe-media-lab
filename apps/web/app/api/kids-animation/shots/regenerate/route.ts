@@ -37,7 +37,11 @@ export const POST = createApiHandler<ShotRegenerateResponse>(
     const styleConfig = KIDS_ANIMATION_STYLES[style]
     const formFactorPreset = KIDS_FORM_FACTOR_PRESETS[formFactor]
 
-    const prompt = `${visualPrompt}. ${styleConfig.visualPromptSuffix}`
+    // visualPrompt에 이미 스타일 접미사가 포함되어 있으면 이중 추가 방지
+    const suffix = styleConfig.visualPromptSuffix
+    const prompt = visualPrompt.includes(suffix)
+      ? visualPrompt
+      : `${visualPrompt}. ${suffix}`
 
     logger.info('Shot regeneration request', {
       sessionId,
