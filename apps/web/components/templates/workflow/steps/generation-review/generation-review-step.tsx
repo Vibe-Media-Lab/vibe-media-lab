@@ -922,6 +922,7 @@ export function GenerationReviewStep({
 
     setRegeneratingItemId(itemId)
     setError(null)
+    isGeneratingRef.current = true
 
     try {
       if (config.generateAction === 'kids/shots') {
@@ -934,12 +935,9 @@ export function GenerationReviewStep({
           throw new Error(`샷 데이터를 찾을 수 없습니다: ${itemId}`)
         }
 
-        // 앵커 URL 추출 (expand → anchors fallback)
-        const expandData = unwrapStepResult(regenCtx.expand)
+        // 원본 앵커 URL 사용 (배치 생성과 동일 — expanded는 참조 이미지가 너무 많아 Gemini 실패)
         const anchorsStepData = regenCtx.anchors
-        const anchorUrls: string[] = expandData?.expanded
-          ? expandData.expanded.map(a => a.url).filter(Boolean)
-          : (anchorsStepData?.generated || []).map(a => a.url).filter(Boolean)
+        const anchorUrls: string[] = (anchorsStepData?.generated || []).map(a => a.url).filter(Boolean)
 
         const response = await fetch('/api/kids-animation/shots/regenerate', {
           method: 'POST',
@@ -1072,9 +1070,11 @@ export function GenerationReviewStep({
         }
       }
     } catch (err) {
+      console.error('[GenerationReview] Regenerate error:', err)
       setError(err instanceof Error ? err.message : '재생성에 실패했습니다')
     } finally {
       setRegeneratingItemId(null)
+      isGeneratingRef.current = false
     }
   }
 
