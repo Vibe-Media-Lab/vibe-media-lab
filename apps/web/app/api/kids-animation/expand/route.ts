@@ -62,71 +62,90 @@ export const POST = createApiHandler<ExpandResponse>(
     const backgroundAspectRatio = preset.anchor.background.aspectRatio
     const resolution = preset.resolution
 
-    const expanded: ExpandedAnchor[] = []
-    let successCount = 0
-    let failedCount = 0
-
     logger.debug('Processing anchors for expansion', {
       count: anchors.length,
       ids: anchors.map((a) => a.id),
     })
 
-    for (const anchor of anchors) {
+    // 모든 변형 작업을 평탄화하여 병렬 실행
+    const tasks = anchors.flatMap((anchor) => {
       const variations = anchor.category === 'character'
         ? characterVariations
         : backgroundVariations
-
       const variationPrompts = anchor.category === 'character'
         ? CHARACTER_VARIATIONS
         : BACKGROUND_VARIATIONS
 
-      // Generate each variation
-      for (const variation of variations) {
-        const prompt = variationPrompts[variation as CharacterVariation & BackgroundVariation]
-        const aspectRatio = anchor.category === 'character'
+      return variations.map((variation) => ({
+        anchor,
+        variation,
+        prompt: variationPrompts[variation as CharacterVariation & BackgroundVariation],
+        aspectRatio: anchor.category === 'character'
           ? characterAspectRatio
-          : backgroundAspectRatio
+          : backgroundAspectRatio,
+      }))
+    })
 
-        logger.debug('Generating variation', {
-          anchorId: anchor.id,
-          variation,
-          category: anchor.category,
-        })
+    logger.debug('Parallel expansion tasks', { totalTasks: tasks.length })
 
+    const results = await Promise.allSettled(
+      tasks.map(async (task) => {
         const result = await editImage({
-          prompt,
-          referenceUrls: [anchor.url],
-          aspectRatio,
+          prompt: task.prompt,
+          referenceUrls: [task.anchor.url],
+          aspectRatio: task.aspectRatio,
           resolution,
         })
+        return { task, result }
+      })
+    )
 
-        logger.debug('Variation result', {
-          id: `${anchor.id}-${variation}`,
-          success: result.success,
-          hasUrl: !!result.url,
-        })
+    const expanded: ExpandedAnchor[] = []
+    let successCount = 0
+    let failedCount = 0
 
+    for (const settled of results) {
+      if (settled.status === 'fulfilled') {
+        const { task, result } = settled.value
         if (result.success && result.url) {
           expanded.push({
-            id: `${anchor.id}-${variation}`,
-            originalId: anchor.id,
-            category: anchor.category,
-            name: anchor.name,
-            variation,
+            id: `${task.anchor.id}-${task.variation}`,
+            originalId: task.anchor.id,
+            category: task.anchor.category,
+            name: task.anchor.name,
+            variation: task.variation,
             url: result.url,
           })
           successCount++
         } else {
-          // On failure, use original URL with variation marker
           expanded.push({
-            id: `${anchor.id}-${variation}`,
-            originalId: anchor.id,
-            category: anchor.category,
-            name: anchor.name,
-            variation,
-            url: `${anchor.url}?variation=${variation}&error=true`,
+            id: `${task.anchor.id}-${task.variation}`,
+            originalId: task.anchor.id,
+            category: task.anchor.category,
+            name: task.anchor.name,
+            variation: task.variation,
+            url: `${task.anchor.url}?variation=${task.variation}&error=true`,
           })
           failedCount++
+        }
+      } else {
+        // Promise rejected
+        const task = tasks[results.indexOf(settled)]
+        if (task) {
+          expanded.push({
+            id: `${task.anchor.id}-${task.variation}`,
+            originalId: task.anchor.id,
+            category: task.anchor.category,
+            name: task.anchor.name,
+            variation: task.variation,
+            url: `${task.anchor.url}?variation=${task.variation}&error=true`,
+          })
+          failedCount++
+          logger.error('Expansion task rejected', {
+            anchorId: task.anchor.id,
+            variation: task.variation,
+            error: settled.reason,
+          })
         }
       }
     }
