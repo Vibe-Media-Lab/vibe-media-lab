@@ -396,36 +396,44 @@ export async function batchEditImages(
     return mockBatchEditImages(params, onProgress)
   }
 
-  const results: BatchGenerationResult['results'] = []
   const total = params.tasks.length
 
-  // Process sequentially for better progress tracking
-  for (let i = 0; i < total; i++) {
-    const task = params.tasks[i]
-    if (!task) continue
+  // 병렬 실행으로 타임아웃 방지
+  const settled = await Promise.allSettled(
+    params.tasks.map((task, i) =>
+      editImage({
+        prompt: task.prompt,
+        referenceUrls: task.referenceUrls,
+        aspectRatio: params.aspectRatio,
+        model: params.model,
+        resolution: params.resolution,
+        userId: params.userId,
+        projectId: params.projectId,
+        sessionId: params.sessionId,
+        metadata: { ...params.metadata, batchIndex: i },
+      }).then((result) => {
+        onProgress?.(i + 1, total, result)
+        return { index: i, result }
+      })
+    )
+  )
 
-    // userId와 sessionId를 각 editImage 호출에 전달
-    const result = await editImage({
-      prompt: task.prompt,
-      referenceUrls: task.referenceUrls,
-      aspectRatio: params.aspectRatio,
-      model: params.model,
-      resolution: params.resolution,
-      userId: params.userId,
-      projectId: params.projectId,
-      sessionId: params.sessionId,
-      metadata: { ...params.metadata, batchIndex: i },
-    })
-
-    results.push({
+  const results: BatchGenerationResult['results'] = settled.map((s, i) => {
+    if (s.status === 'fulfilled') {
+      return {
+        index: s.value.index,
+        success: s.value.result.success,
+        url: s.value.result.url,
+        error: s.value.result.error,
+      }
+    }
+    return {
       index: i,
-      success: result.success,
-      url: result.url,
-      error: result.error,
-    })
-
-    onProgress?.(i + 1, total, result)
-  }
+      success: false,
+      url: undefined,
+      error: String(s.reason),
+    }
+  })
 
   return {
     success: results.every((r) => r.success),
