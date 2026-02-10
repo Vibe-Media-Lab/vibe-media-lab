@@ -309,9 +309,11 @@ async function editImageWithGemini(
     })
     const message =
       error instanceof GeminiImageError ? error.message : 'Image edit failed'
+    // diagnostics를 metadata로 전달하여 API 응답에서 확인 가능
     return {
       success: false,
       error: message,
+      metadata: details ? { geminiDiagnostics: details } : undefined,
     }
   }
 }

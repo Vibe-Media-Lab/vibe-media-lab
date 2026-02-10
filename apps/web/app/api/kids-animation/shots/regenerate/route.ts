@@ -54,6 +54,7 @@ export const POST = createApiHandler<ShotRegenerateResponse>(
 
     // 재시도 로직 (배치 생성과 동일 패턴 — Gemini finishReason: OTHER 대응)
     let lastError: string | undefined
+    let lastDiagnostics: Record<string, unknown> | undefined
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       if (attempt > 0) {
         logger.info('Shot regeneration retry', { sessionId, shotId, attempt })
@@ -81,16 +82,21 @@ export const POST = createApiHandler<ShotRegenerateResponse>(
       }
 
       lastError = result.error
+      lastDiagnostics = result.metadata?.geminiDiagnostics as Record<string, unknown> | undefined
       logger.warn('Shot regeneration attempt failed', {
         sessionId,
         shotId,
         attempt,
         error: lastError,
-        metadata: result.metadata,
+        diagnostics: lastDiagnostics,
       })
     }
 
-    throw new Error(lastError || '샷 이미지 재생성에 실패했습니다')
+    // diagnostics를 에러 메시지에 포함하여 클라이언트에서 원인 확인 가능
+    const diagSummary = lastDiagnostics
+      ? ` | blockReason=${(lastDiagnostics.promptFeedback as Record<string, unknown>)?.blockReason ?? 'none'}, safetyRatings=${JSON.stringify(lastDiagnostics.candidateSafetyRatings ?? [])}`
+      : ''
+    throw new Error((lastError || '샷 이미지 재생성에 실패했습니다') + diagSummary)
   },
   { rateLimit: { maxRequests: 20, windowMs: 60_000 } }
 )
