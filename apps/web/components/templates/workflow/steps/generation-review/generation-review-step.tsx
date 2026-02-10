@@ -184,9 +184,12 @@ export function GenerationReviewStep({
   const [selectedForRegenerate, setSelectedForRegenerate] = React.useState<Set<string>>(new Set())
   // 비디오 개별 재생성
   const [regeneratingItemId, setRegeneratingItemId] = React.useState<string | null>(null)
+  // 생성 중 useEffect 리셋 방지
+  const isGeneratingRef = React.useRef(false)
 
   // Reset status when stepId changes (switching between steps)
   React.useEffect(() => {
+    if (isGeneratingRef.current) return
     const isValid = hasValidGeneratedData(value, config.previewType)
     setStatus(isValid ? 'reviewing' : 'idle')
     setError(null)
@@ -661,6 +664,7 @@ export function GenerationReviewStep({
   }
 
   const handleGenerate = async () => {
+    isGeneratingRef.current = true
     setStatus('generating')
     setError(null)
 
@@ -805,6 +809,8 @@ export function GenerationReviewStep({
       console.error('[GenerationReview] Error caught:', err)
       setError(err instanceof Error ? err.message : '생성에 실패했습니다')
       setStatus('failed')
+    } finally {
+      isGeneratingRef.current = false
     }
   }
 
