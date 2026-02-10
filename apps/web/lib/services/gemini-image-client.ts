@@ -167,7 +167,17 @@ async function callGeminiImage(
 
   const candidate = data.candidates?.[0]
   if (!candidate?.content?.parts) {
-    throw new GeminiImageError('No response from Gemini')
+    const finishReason = candidate?.finishReason || 'UNKNOWN'
+    logger.error('Gemini returned no image content', {
+      finishReason,
+      hasCandidates: !!data.candidates?.length,
+      hasContent: !!candidate?.content,
+    })
+    throw new GeminiImageError(
+      `No response from Gemini (finishReason: ${finishReason})`,
+      undefined,
+      { finishReason }
+    )
   }
 
   // Extract image and text from response
