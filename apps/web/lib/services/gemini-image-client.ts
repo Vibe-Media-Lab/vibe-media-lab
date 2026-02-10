@@ -92,13 +92,24 @@ interface GeminiContent {
   parts: GeminiPart[]
 }
 
+interface GeminiSafetyRating {
+  category: string
+  probability: string
+  blocked?: boolean
+}
+
 interface GeminiResponse {
   candidates?: Array<{
     content?: {
       parts?: GeminiPart[]
     }
     finishReason?: string
+    safetyRatings?: GeminiSafetyRating[]
   }>
+  promptFeedback?: {
+    blockReason?: string
+    safetyRatings?: GeminiSafetyRating[]
+  }
   error?: {
     code: number
     message: string
@@ -129,9 +140,21 @@ async function callGeminiImage(
     },
   }
 
-  logger.debug('Calling Gemini Image API', {
-    hasAspectRatio: !!config.aspectRatio,
-    hasImageSize: !!config.imageSize,
+  // 참조 이미지 수와 크기 추출
+  const refImageStats = contents[0]?.parts
+    ?.filter(p => p.inlineData)
+    .map(p => ({
+      mimeType: p.inlineData!.mimeType,
+      sizeKB: Math.round((p.inlineData!.data.length * 3 / 4) / 1024),
+    })) || []
+  const textParts = contents[0]?.parts?.filter(p => p.text).map(p => p.text?.slice(0, 100)) || []
+
+  logger.info('Calling Gemini Image API', {
+    aspectRatio: config.aspectRatio,
+    imageSize: config.imageSize,
+    refImageCount: refImageStats.length,
+    refImageStats,
+    textPreview: textParts,
   })
 
   const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
@@ -165,18 +188,24 @@ async function callGeminiImage(
     )
   }
 
+  // 공통 진단 데이터 (성공/실패 모두 기록)
   const candidate = data.candidates?.[0]
+  const diagnostics = {
+    candidateCount: data.candidates?.length ?? 0,
+    finishReason: candidate?.finishReason || 'UNKNOWN',
+    hasCandidateParts: !!candidate?.content?.parts?.length,
+    candidateSafetyRatings: candidate?.safetyRatings,
+    promptFeedback: data.promptFeedback,
+    refImageCount: refImageStats.length,
+    refImageStats,
+  }
+
   if (!candidate?.content?.parts) {
-    const finishReason = candidate?.finishReason || 'UNKNOWN'
-    logger.error('Gemini returned no image content', {
-      finishReason,
-      hasCandidates: !!data.candidates?.length,
-      hasContent: !!candidate?.content,
-    })
+    logger.error('Gemini returned no image content', diagnostics)
     throw new GeminiImageError(
-      `No response from Gemini (finishReason: ${finishReason})`,
+      `No response from Gemini (finishReason: ${diagnostics.finishReason})`,
       undefined,
-      { finishReason }
+      diagnostics
     )
   }
 
@@ -196,8 +225,17 @@ async function callGeminiImage(
   }
 
   if (!base64) {
+    logger.error('Gemini response had parts but no image', diagnostics)
     throw new GeminiImageError('No image in response')
   }
+
+  logger.info('Gemini Image API success', {
+    finishReason: diagnostics.finishReason,
+    candidateSafetyRatings: diagnostics.candidateSafetyRatings,
+    promptFeedback: diagnostics.promptFeedback,
+    hasText: !!text,
+    imageSizeKB: Math.round((base64.length * 3 / 4) / 1024),
+  })
 
   return {
     success: true,

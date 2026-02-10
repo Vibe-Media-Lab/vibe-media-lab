@@ -302,8 +302,10 @@ async function editImageWithGemini(
       },
     }
   } catch (error) {
+    const details = error instanceof GeminiImageError ? error.details : undefined
     logger.error('Image edit with Gemini failed', {
       error: error instanceof Error ? error.message : String(error),
+      details,
     })
     const message =
       error instanceof GeminiImageError ? error.message : 'Image edit failed'

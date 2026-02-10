@@ -37,14 +37,20 @@ export const POST = createApiHandler<ShotRegenerateResponse>(
     const styleConfig = KIDS_ANIMATION_STYLES[style]
     const formFactorPreset = KIDS_FORM_FACTOR_PRESETS[formFactor]
 
-    logger.info('Shot image regeneration started', {
+    const prompt = `${visualPrompt}. ${styleConfig.visualPromptSuffix}`
+
+    logger.info('Shot regeneration request', {
       sessionId,
       shotId,
+      style,
+      formFactor,
       anchorCount: anchorUrls.length,
-      promptLength: visualPrompt.length,
+      anchorUrls: anchorUrls.map(u => u.slice(0, 100)),
+      promptLength: prompt.length,
+      promptPreview: prompt.slice(0, 300),
+      aspectRatio: formFactorPreset.shot.aspectRatio,
+      resolution: formFactorPreset.shot.resolution,
     })
-
-    const prompt = `${visualPrompt}. ${styleConfig.visualPromptSuffix}`
 
     // 재시도 로직 (배치 생성과 동일 패턴 — Gemini finishReason: OTHER 대응)
     let lastError: string | undefined
@@ -80,6 +86,7 @@ export const POST = createApiHandler<ShotRegenerateResponse>(
         shotId,
         attempt,
         error: lastError,
+        metadata: result.metadata,
       })
     }
 
