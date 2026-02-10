@@ -2,13 +2,21 @@
 
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { Sparkles, RotateCcw, Heart, Download, Loader2 } from 'lucide-react'
+import { Sparkles, RotateCcw, Heart, Download, Loader2, Edit3 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import type { Shot } from '../types'
 import { unwrapApiData } from '@/lib/api/kids-animation/types'
 
 interface ShotGalleryPreviewProps {
   data: unknown
-  onRegenerateItem?: (id: string) => void
+  onRegenerateItem?: (id: string, editedPrompt?: string) => void
   onLikeItem?: (id: string, url: string) => void
   onDownloadItem?: (id: string, url: string) => void
   regeneratingItemId?: string | null
@@ -16,6 +24,8 @@ interface ShotGalleryPreviewProps {
 
 export function ShotGalleryPreview({ data, onRegenerateItem, onLikeItem, onDownloadItem, regeneratingItemId }: ShotGalleryPreviewProps) {
   const [likedItems, setLikedItems] = React.useState<Set<string>>(new Set())
+  const [editingShot, setEditingShot] = React.useState<Shot | null>(null)
+  const [editedPrompt, setEditedPrompt] = React.useState('')
 
   const handleLike = (id: string, url: string) => {
     setLikedItems((prev) => {
@@ -87,8 +97,24 @@ export function ShotGalleryPreview({ data, onRegenerateItem, onLikeItem, onDownl
                     )}
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <Sparkles className="h-8 w-8 text-white/20" />
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2">
+                    <Sparkles className="h-6 w-6 text-white/20" />
+                    <span className="text-xs text-white/40">이미지 생성 실패</span>
+                    {onRegenerateItem && !isRegenerating && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-1 border-white/30 bg-transparent text-xs text-white hover:bg-white/10"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingShot(shot)
+                          setEditedPrompt(shot.visualPrompt)
+                        }}
+                      >
+                        <Edit3 className="mr-1 h-3 w-3" />
+                        프롬프트 수정 후 재생성
+                      </Button>
+                    )}
                   </div>
                 )}
                 {/* 재생성 로딩 오버레이 */}
@@ -132,16 +158,29 @@ export function ShotGalleryPreview({ data, onRegenerateItem, onLikeItem, onDownl
                       </>
                     )}
                     {onRegenerateItem && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onRegenerateItem(shot.id)
-                        }}
-                        className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
-                        title="재생성"
-                      >
-                        <RotateCcw className="h-3 w-3 text-white" />
-                      </button>
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingShot(shot)
+                            setEditedPrompt(shot.visualPrompt)
+                          }}
+                          className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
+                          title="프롬프트 수정 후 재생성"
+                        >
+                          <Edit3 className="h-3 w-3 text-white" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onRegenerateItem(shot.id)
+                          }}
+                          className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
+                          title="재생성"
+                        >
+                          <RotateCcw className="h-3 w-3 text-white" />
+                        </button>
+                      </>
                     )}
                   </div>
                 )}
@@ -155,6 +194,56 @@ export function ShotGalleryPreview({ data, onRegenerateItem, onLikeItem, onDownl
           )
         })}
       </div>
+
+      {/* 프롬프트 편집 다이얼로그 */}
+      <Dialog open={!!editingShot} onOpenChange={(open) => !open && setEditingShot(null)}>
+        <DialogContent className="border-white/20 bg-[#1a1a2e] text-white sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Shot #{editingShot?.shotNumber} 프롬프트 수정
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <span className="text-xs text-white/40">비주얼 프롬프트</span>
+            <textarea
+              value={editedPrompt}
+              onChange={(e) => setEditedPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && editedPrompt.trim()) {
+                  if (editingShot && onRegenerateItem) {
+                    onRegenerateItem(editingShot.id, editedPrompt.trim())
+                    setEditingShot(null)
+                  }
+                }
+              }}
+              className="w-full rounded-lg border border-white/30 bg-white/5 p-3 text-sm text-white focus:border-[var(--color-neon-pink)] focus:outline-none"
+              rows={6}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingShot(null)}
+              className="border-white/30 bg-transparent text-white hover:bg-white/10"
+            >
+              취소
+            </Button>
+            <Button
+              disabled={!editedPrompt.trim()}
+              onClick={() => {
+                if (editingShot && onRegenerateItem && editedPrompt.trim()) {
+                  onRegenerateItem(editingShot.id, editedPrompt.trim())
+                  setEditingShot(null)
+                }
+              }}
+              className="bg-gradient-to-r from-[var(--color-neon-pink)] to-[var(--color-neon-purple)] disabled:opacity-50"
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              재생성
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

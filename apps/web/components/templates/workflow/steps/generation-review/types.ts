@@ -146,7 +146,7 @@ export interface PreviewProps {
   data: unknown
   editable?: boolean
   onEdit?: (data: unknown) => void
-  onRegenerateItem?: (itemId: string) => void
+  onRegenerateItem?: (itemId: string, editedPrompt?: string) => void
   onLikeItem?: (itemId: string, url: string) => void
   onDownloadItem?: (itemId: string, url: string) => void
   selectedBgmIndex?: number

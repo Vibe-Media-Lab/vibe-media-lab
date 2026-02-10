@@ -7,7 +7,7 @@ import type { VideoItem } from '../types'
 
 interface VideoTimelinePreviewProps {
   data: VideoItem[]
-  onRegenerateItem?: (id: string) => void
+  onRegenerateItem?: (id: string, editedPrompt?: string) => void
   onLikeItem?: (id: string, url: string) => void
   onDownloadItem?: (id: string, url: string) => void
   regeneratingItemId?: string | null

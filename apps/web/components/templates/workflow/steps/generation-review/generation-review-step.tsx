@@ -915,7 +915,7 @@ export function GenerationReviewStep({
     handleGenerate()
   }
 
-  const handleRegenerateItem = async (itemId: string) => {
+  const handleRegenerateItem = async (itemId: string, editedPrompt?: string) => {
     // 샷 이미지 및 비디오 개별 재생성 지원
     if (config.generateAction !== 'kids/videos' && config.generateAction !== 'kids/shots') return
 
@@ -942,9 +942,9 @@ export function GenerationReviewStep({
           shot.id === itemId ||
           (targetShot?.shotNumber !== undefined && shot.shotNumber === targetShot.shotNumber)
         )
-        // 재생성은 현재 샷 결과가 아니라 "이전 단계 스크립트" 기준 프롬프트를 우선 사용
+        // 우선순위: 사용자 편집 프롬프트 > 스크립트 원본 > 샷 결과
         const promptFromScript = targetScriptShot?.visualPrompt
-        const promptToUse = promptFromScript || targetShot?.visualPrompt
+        const promptToUse = editedPrompt || promptFromScript || targetShot?.visualPrompt
 
         if (!promptToUse) {
           throw new Error(`샷 데이터를 찾을 수 없습니다: ${itemId}`)

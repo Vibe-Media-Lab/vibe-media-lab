@@ -8,7 +8,7 @@ import { unwrapApiData } from '@/lib/api/kids-animation/types'
 
 interface ImageGridPreviewProps {
   data: unknown
-  onRegenerateItem?: (id: string) => void
+  onRegenerateItem?: (id: string, editedPrompt?: string) => void
   onLikeItem?: (id: string, url: string) => void
   onDownloadItem?: (id: string, url: string) => void
 }
