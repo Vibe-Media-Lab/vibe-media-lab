@@ -910,29 +910,13 @@ export function GenerationReviewStep({
   }
 
   const handleRegenerateItem = async (itemId: string) => {
-    // 비디오 개별 재생성만 지원
-    if (config.generateAction !== 'kids/videos') return
+    // 샷 이미지 및 비디오 개별 재생성 지원
+    if (config.generateAction !== 'kids/videos' && config.generateAction !== 'kids/shots') return
 
     // 이미 재생성 중이면 중복 요청 방지
     if (regeneratingItemId) return
 
-    // 현재 단계(value)에서 먼저 찾고, 없으면 inputContext.shots에서 fallback
     const regenCtx = asKidsContext(inputContext)
-    const regenShotsData = unwrapStepResult(regenCtx.shots)
-
-    // value에서 현재 단계 shot 데이터 추출 (사용자 편집 반영)
-    const currentValueData = value?.data as { shots?: Array<{ id: string; shotNumber: number; videoUrl: string; visualPrompt?: string; imageUrl?: string; duration?: number }> } | undefined
-    const currentShot = currentValueData?.shots?.find(s => s.id === itemId)
-    const fallbackShot = regenShotsData?.shots?.find(s => s.id === itemId)
-    const originalShot = currentShot
-      ? { ...fallbackShot, ...currentShot }
-      : fallbackShot
-
-    if (!originalShot) {
-      setError(`원본 샷 데이터를 찾을 수 없습니다: ${itemId}`)
-      return
-    }
-
     const regenSetup = regenCtx.setup ?? DEFAULT_KIDS_SETUP
     const regenStoryData = unwrapStepResult(regenCtx.story)
 
@@ -940,71 +924,155 @@ export function GenerationReviewStep({
     setError(null)
 
     try {
-      const response = await fetch('/api/kids-animation/videos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: sessionId || regenStoryData?.sessionId || `session-${Date.now()}`,
-          shot: originalShot,
-          formFactor: regenSetup.formFactor || 'longform',
-        }),
-      })
+      if (config.generateAction === 'kids/shots') {
+        // 샷 이미지 개별 재생성
+        const currentData = value?.data as { success?: boolean; data?: { shots?: Array<{ id: string; shotNumber: number; visualPrompt: string; imageUrl?: string }> }; shots?: Array<{ id: string; shotNumber: number; visualPrompt: string; imageUrl?: string }> } | undefined
+        const innerShots = currentData?.data?.shots || currentData?.shots
+        const targetShot = innerShots?.find(s => s.id === itemId)
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(extractErrorMessage(errorData, `비디오 재생성 실패: ${response.status}`))
-      }
-
-      const result = await response.json()
-
-      if (!result.success && result.error) {
-        throw new Error(result.error)
-      }
-
-      const newVideoUrl = result.data?.videoUrl || ''
-
-      if (!newVideoUrl) {
-        throw new Error('비디오 URL이 반환되지 않았습니다')
-      }
-
-      // value.data에서 해당 shot의 videoUrl만 immutable update
-      if (value) {
-        const currentData = value.data as { success?: boolean; data?: { sessionId?: string; shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> } }
-        const innerData = currentData?.data || currentData as unknown as { sessionId?: string; shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> }
-
-        const currentShots = innerData?.shots
-        if (!currentShots || currentShots.length === 0) {
-          throw new Error('비디오 데이터가 존재하지 않습니다')
+        if (!targetShot?.visualPrompt) {
+          throw new Error(`샷 데이터를 찾을 수 없습니다: ${itemId}`)
         }
 
-        const updatedShots = currentShots.map(shot =>
-          shot.id === itemId ? { ...shot, videoUrl: newVideoUrl } : shot
-        )
+        // 앵커 URL 추출 (expand → anchors fallback)
+        const expandData = unwrapStepResult(regenCtx.expand)
+        const anchorsStepData = regenCtx.anchors
+        const anchorUrls: string[] = expandData?.expanded
+          ? expandData.expanded.map(a => a.url).filter(Boolean)
+          : (anchorsStepData?.generated || []).map(a => a.url).filter(Boolean)
 
-        // 원래 데이터 구조를 유지하며 업데이트
-        if (currentData?.success !== undefined && currentData?.data) {
-          onChange({
-            ...value,
-            data: {
-              ...currentData,
+        const response = await fetch('/api/kids-animation/shots/regenerate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: sessionId || regenStoryData?.sessionId || `session-${Date.now()}`,
+            projectId,
+            shotId: itemId,
+            visualPrompt: targetShot.visualPrompt,
+            anchorUrls,
+            style: regenSetup.style || 'pixar',
+            formFactor: regenSetup.formFactor || 'longform',
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(extractErrorMessage(errorData, `샷 이미지 재생성 실패: ${response.status}`))
+        }
+
+        const result = await response.json()
+        const newImageUrl = result.data?.imageUrl || ''
+
+        if (!newImageUrl) {
+          throw new Error('이미지 URL이 반환되지 않았습니다')
+        }
+
+        // value.data에서 해당 shot의 imageUrl만 immutable update
+        if (value) {
+          if (currentData?.success !== undefined && currentData?.data?.shots) {
+            onChange({
+              ...value,
               data: {
-                ...currentData.data,
+                ...currentData,
+                data: {
+                  ...currentData.data,
+                  shots: currentData.data.shots.map(shot =>
+                    shot.id === itemId ? { ...shot, imageUrl: newImageUrl } : shot
+                  ),
+                },
+              },
+            })
+          } else if (currentData?.shots) {
+            onChange({
+              ...value,
+              data: {
+                ...currentData,
+                shots: currentData.shots.map(shot =>
+                  shot.id === itemId ? { ...shot, imageUrl: newImageUrl } : shot
+                ),
+              },
+            })
+          }
+        }
+      } else {
+        // 비디오 개별 재생성 (기존 로직)
+        const regenShotsData = unwrapStepResult(regenCtx.shots)
+        const currentValueData = value?.data as { shots?: Array<{ id: string; shotNumber: number; videoUrl: string; visualPrompt?: string; imageUrl?: string; duration?: number }> } | undefined
+        const currentShot = currentValueData?.shots?.find(s => s.id === itemId)
+        const fallbackShot = regenShotsData?.shots?.find(s => s.id === itemId)
+        const originalShot = currentShot
+          ? { ...fallbackShot, ...currentShot }
+          : fallbackShot
+
+        if (!originalShot) {
+          throw new Error(`원본 샷 데이터를 찾을 수 없습니다: ${itemId}`)
+        }
+
+        const response = await fetch('/api/kids-animation/videos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: sessionId || regenStoryData?.sessionId || `session-${Date.now()}`,
+            shot: originalShot,
+            formFactor: regenSetup.formFactor || 'longform',
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(extractErrorMessage(errorData, `비디오 재생성 실패: ${response.status}`))
+        }
+
+        const result = await response.json()
+
+        if (!result.success && result.error) {
+          throw new Error(result.error)
+        }
+
+        const newVideoUrl = result.data?.videoUrl || ''
+
+        if (!newVideoUrl) {
+          throw new Error('비디오 URL이 반환되지 않았습니다')
+        }
+
+        // value.data에서 해당 shot의 videoUrl만 immutable update
+        if (value) {
+          const currentData = value.data as { success?: boolean; data?: { sessionId?: string; shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> } }
+          const innerData = currentData?.data || currentData as unknown as { sessionId?: string; shots?: Array<{ id: string; shotNumber: number; videoUrl: string }> }
+
+          const currentShots = innerData?.shots
+          if (!currentShots || currentShots.length === 0) {
+            throw new Error('비디오 데이터가 존재하지 않습니다')
+          }
+
+          const updatedShots = currentShots.map(shot =>
+            shot.id === itemId ? { ...shot, videoUrl: newVideoUrl } : shot
+          )
+
+          if (currentData?.success !== undefined && currentData?.data) {
+            onChange({
+              ...value,
+              data: {
+                ...currentData,
+                data: {
+                  ...currentData.data,
+                  shots: updatedShots,
+                },
+              },
+            })
+          } else {
+            onChange({
+              ...value,
+              data: {
+                ...currentData,
                 shots: updatedShots,
               },
-            },
-          })
-        } else {
-          onChange({
-            ...value,
-            data: {
-              ...currentData,
-              shots: updatedShots,
-            },
-          })
+            })
+          }
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '비디오 재생성에 실패했습니다')
+      setError(err instanceof Error ? err.message : '재생성에 실패했습니다')
     } finally {
       setRegeneratingItemId(null)
     }
@@ -1026,9 +1094,22 @@ export function GenerationReviewStep({
     }
   }
 
-  const handleDownloadItem = async (itemId: string, url: string) => {
-    // Default download is handled in preview components
-    console.log('Download item:', itemId, url)
+  const handleDownloadItem = async (_itemId: string, url: string) => {
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      const ext = blob.type.includes('video') ? 'mp4' : blob.type.includes('audio') ? 'mp3' : 'png'
+      link.download = `vibe-${_itemId}-${Date.now()}.${ext}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(blobUrl)
+    } catch {
+      window.open(url, '_blank')
+    }
   }
 
   const handleApprove = () => {
