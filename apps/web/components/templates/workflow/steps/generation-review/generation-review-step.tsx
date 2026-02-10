@@ -933,23 +933,35 @@ export function GenerationReviewStep({
     try {
       if (config.generateAction === 'kids/shots') {
         // 샷 이미지 개별 재생성
+        const regenScriptResult = unwrapStepResult(regenCtx.script)
+        const scriptShots = regenScriptResult?.script?.shots || []
         const currentData = value?.data as { success?: boolean; data?: { shots?: Array<{ id: string; shotNumber: number; visualPrompt: string; imageUrl?: string }> }; shots?: Array<{ id: string; shotNumber: number; visualPrompt: string; imageUrl?: string }> } | undefined
         const innerShots = currentData?.data?.shots || currentData?.shots
         const targetShot = innerShots?.find(s => s.id === itemId)
+        const targetScriptShot = scriptShots.find((shot) =>
+          shot.id === itemId ||
+          (targetShot?.shotNumber !== undefined && shot.shotNumber === targetShot.shotNumber)
+        )
+        // 재생성은 현재 샷 결과가 아니라 "이전 단계 스크립트" 기준 프롬프트를 우선 사용
+        const promptFromScript = targetScriptShot?.visualPrompt
+        const promptToUse = promptFromScript || targetShot?.visualPrompt
 
-        if (!targetShot?.visualPrompt) {
+        if (!promptToUse) {
           throw new Error(`샷 데이터를 찾을 수 없습니다: ${itemId}`)
         }
 
-        // 원본 앵커 URL 사용 (배치 생성과 동일 — expanded는 참조 이미지가 너무 많아 Gemini 실패)
+        // 이전 단계(anchors)에서 생성된 원본 앵커 URL 사용
         const anchorsStepData = regenCtx.anchors
         const anchorUrls: string[] = (anchorsStepData?.generated || []).map(a => a.url).filter(Boolean)
+        if (anchorUrls.length === 0) {
+          throw new Error('참조 이미지(앵커)가 없습니다. 앵커 단계를 다시 생성해주세요.')
+        }
 
         const regenRequestBody = {
           sessionId: sessionId || regenStoryData?.sessionId || `session-${Date.now()}`,
           projectId,
           shotId: itemId,
-          visualPrompt: targetShot.visualPrompt,
+          visualPrompt: promptToUse,
           anchorUrls,
           style: regenSetup.style || 'pixar',
           formFactor: regenSetup.formFactor || 'longform',
@@ -984,7 +996,9 @@ export function GenerationReviewStep({
                 data: {
                   ...currentData.data,
                   shots: currentData.data.shots.map(shot =>
-                    shot.id === itemId ? { ...shot, imageUrl: newImageUrl } : shot
+                    shot.id === itemId
+                      ? { ...shot, imageUrl: newImageUrl, visualPrompt: promptToUse }
+                      : shot
                   ),
                 },
               },
@@ -995,7 +1009,9 @@ export function GenerationReviewStep({
               data: {
                 ...currentData,
                 shots: currentData.shots.map(shot =>
-                  shot.id === itemId ? { ...shot, imageUrl: newImageUrl } : shot
+                  shot.id === itemId
+                    ? { ...shot, imageUrl: newImageUrl, visualPrompt: promptToUse }
+                    : shot
                 ),
               },
             })
