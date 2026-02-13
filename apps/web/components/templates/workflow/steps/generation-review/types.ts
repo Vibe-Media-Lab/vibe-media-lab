@@ -8,7 +8,7 @@ import type {
   GenerationProgressItem,
 } from '@vibe-media-lab/shared'
 
-export type StepStatus = 'idle' | 'generating' | 'reviewing' | 'approved' | 'failed'
+export type StepStatus = 'idle' | 'generating' | 'reviewing' | 'failed'
 
 export interface GenerationResult {
   data: unknown

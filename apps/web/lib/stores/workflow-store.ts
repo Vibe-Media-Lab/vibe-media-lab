@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 import type { WorkflowStep, MediaType } from '@vibe-media-lab/shared'
+import type { ModelCapability } from '@/lib/models/types'
+import { ENABLED } from '@/lib/models/enabled'
+import { getStepPolicy } from '@/lib/models/workflow-policies'
 
 export type WorkflowStatus = 'idle' | 'in_progress' | 'generating' | 'completed' | 'failed'
 
@@ -29,6 +32,8 @@ interface WorkflowState {
   isSaving: boolean
   lastSavedAt: Date | null
   isRestoring: boolean
+  // Model selections
+  modelSelections: Record<string, string>  // { 'shots': 'gemini-3-pro-image-preview', 'audio:secondary': 'V4_5' }
 }
 
 interface WorkflowActions {
@@ -54,6 +59,9 @@ interface WorkflowActions {
     outputUrl: string | null
     status: string
   }) => void
+  // Model selection actions
+  setModelSelection: (key: string, modelId: string) => void
+  getModelSelection: (key: string, defaultId: string) => string
 }
 
 const initialState: WorkflowState = {
@@ -70,11 +78,14 @@ const initialState: WorkflowState = {
   isSaving: false,
   lastSavedAt: null,
   isRestoring: false,
+  modelSelections: {},
 }
 
-// Debounce timer reference
-let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
 const SAVE_DEBOUNCE_MS = 500
+
+/** Pending debounce state — allows flush before page unload */
+let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let pendingSaveState: WorkflowState | null = null
 
 /**
  * Internal save function - saves current state to the server
@@ -109,14 +120,18 @@ async function saveToServer(state: WorkflowState): Promise<boolean> {
 }
 
 /**
- * Debounced save - schedules a save after SAVE_DEBOUNCE_MS
+ * Debounced save - schedules a save after SAVE_DEBOUNCE_MS.
+ * Keeps pendingSaveState so flush can fire synchronously on beforeunload.
  */
 function scheduleDebouncedSave(state: WorkflowState, setSaving: (saving: boolean) => void, setLastSaved: (date: Date) => void) {
   if (saveDebounceTimer) {
     clearTimeout(saveDebounceTimer)
   }
 
+  pendingSaveState = state
+
   saveDebounceTimer = setTimeout(async () => {
+    pendingSaveState = null
     if (!state.projectId) return
 
     setSaving(true)
@@ -129,6 +144,41 @@ function scheduleDebouncedSave(state: WorkflowState, setSaving: (saving: boolean
       setSaving(false)
     }
   }, SAVE_DEBOUNCE_MS)
+}
+
+/**
+ * Flush pending debounced save synchronously (best-effort via sendBeacon).
+ * Called on beforeunload to prevent data loss.
+ */
+function flushPendingSave() {
+  if (!pendingSaveState?.projectId) return
+
+  const state = pendingSaveState
+  pendingSaveState = null
+  if (saveDebounceTimer) {
+    clearTimeout(saveDebounceTimer)
+    saveDebounceTimer = null
+  }
+
+  const payload = JSON.stringify({
+    currentStepIndex: state.currentStepIndex,
+    stepData: state.stepData,
+    status: state.status === 'completed' ? 'completed' : 'in_progress',
+    outputUrl: state.outputUrl,
+  })
+
+  // sendBeacon is fire-and-forget, works on page unload
+  if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+    navigator.sendBeacon(
+      `/api/projects/${state.projectId}`,
+      new Blob([payload], { type: 'application/json' }),
+    )
+  }
+}
+
+// Register beforeunload handler (client-side only)
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', flushPendingSave)
 }
 
 export const useWorkflowStore = create<WorkflowState & WorkflowActions>((set, get) => ({
@@ -257,6 +307,7 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>((set, ge
       clearTimeout(saveDebounceTimer)
       saveDebounceTimer = null
     }
+    pendingSaveState = null
     set(initialState)
   },
 
@@ -324,6 +375,11 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>((set, ge
 
   restoreFromProject: (projectData) => {
     const mappedStatus = projectData.status === 'completed' ? 'completed' : 'in_progress'
+    const savedSelections = (projectData.stepData as Record<string, unknown>)?.__modelSelections as Record<string, string> | undefined
+    const { templateId } = get()
+    const normalizedSelections = savedSelections
+      ? migrateModelSelections(savedSelections, templateId ?? undefined)
+      : {}
 
     set({
       stepData: projectData.stepData || {},
@@ -331,7 +387,33 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>((set, ge
       outputUrl: projectData.outputUrl,
       status: mappedStatus as WorkflowStatus,
       isRestoring: false,
+      modelSelections: normalizedSelections,
     })
+  },
+
+  // Model selection actions
+  setModelSelection: (key, modelId) => {
+    set((state) => {
+      const newSelections = { ...state.modelSelections, [key]: modelId }
+      const newStepData = {
+        ...state.stepData,
+        __modelSelections: newSelections,
+      }
+
+      if (state.projectId) {
+        scheduleDebouncedSave(
+          { ...state, stepData: newStepData },
+          (saving) => set({ isSaving: saving }),
+          (date) => set({ lastSavedAt: date })
+        )
+      }
+
+      return { modelSelections: newSelections, stepData: newStepData }
+    })
+  },
+
+  getModelSelection: (key, defaultId) => {
+    return get().modelSelections[key] || defaultId
   },
 }))
 
@@ -367,4 +449,53 @@ export function getWorkflowProgress(stepData: StepData, steps: WorkflowStep[]): 
   if (steps.length === 0) return 0
   const completedCount = steps.filter((step) => isStepComplete(stepData, step)).length
   return Math.round((completedCount / steps.length) * 100)
+}
+
+// ============================================================
+// Model Selection Migration
+// ============================================================
+
+/** 명시적 스텝키 → capability 매핑 (추론 없음) */
+const STEP_CAPABILITY_MAP: Record<string, ModelCapability> = {
+  'anchors':          'text-to-image',
+  'expand':           'image-to-image',
+  'shots':            'image-to-image',
+  'videos':           'image-to-video',
+  'audio':            'tts',
+  'audio:secondary':  'bgm',
+}
+
+/**
+ * 저장된 모델 선택을 검증/마이그레이션
+ *
+ * workflowId가 있으면 워크플로우 정책 기준, 없으면 전역 enabled 기준.
+ * 비허용 모델 → 해당 정책/capability의 기본값으로 교체.
+ */
+function migrateModelSelections(
+  saved: Record<string, string>,
+  workflowId?: string,
+): Record<string, string> {
+  const result = { ...saved }
+  for (const [stepKey, modelId] of Object.entries(result)) {
+    const capability = STEP_CAPABILITY_MAP[stepKey]
+    if (!capability) continue
+
+    // 워크플로우 정책이 있으면 정책 기준 마이그레이션
+    if (workflowId) {
+      const stepPolicy = getStepPolicy(workflowId, stepKey, capability)
+      if (stepPolicy) {
+        if (!stepPolicy.allowedModels.includes(modelId)) {
+          result[stepKey] = stepPolicy.defaultModel
+        }
+        continue
+      }
+    }
+
+    // 전역 fallback (워크플로우 정책 없는 스텝)
+    const config = ENABLED[capability]
+    if (config && !config.models.includes(modelId)) {
+      result[stepKey] = config.defaultId
+    }
+  }
+  return result
 }

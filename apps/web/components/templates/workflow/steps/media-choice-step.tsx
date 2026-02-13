@@ -9,7 +9,6 @@ import {
   Check,
   AlertCircle,
   RotateCcw,
-  ArrowRight,
   X,
   ImagePlus,
   Heart,
@@ -29,13 +28,18 @@ import {
   asKidsContext,
   unwrapStepResult,
 } from '@/lib/api/kids-animation/types'
+import { WorkflowModelPopup } from './generation-review/workflow-model-popup'
+import { useWorkflowStore } from '@/lib/stores/workflow-store'
+import { getAction } from '@/lib/step-actions/registry'
+import type { StepActionContext, StepCallbacks } from '@/lib/step-actions/types'
+import type { GenerationResult } from './generation-review/types'
 
 // ============================================================
 // Types
 // ============================================================
 
 type Mode = 'upload' | 'generate'
-type StepStatus = 'selecting' | 'uploading' | 'generating' | 'reviewing' | 'approved' | 'failed'
+type StepStatus = 'selecting' | 'uploading' | 'generating' | 'reviewing' | 'failed'
 
 interface UploadedFile {
   id: string
@@ -69,6 +73,49 @@ interface MediaChoiceStepProps {
   onApprove?: () => void
   inputContext?: Record<string, unknown>
   projectId?: string | null
+}
+
+// ============================================================
+// Adapter: StepAction <-> MediaChoiceResult 변환
+// ============================================================
+
+interface KidsAnchor {
+  id: string
+  originalUrl?: string
+  category?: string
+  name?: string
+  dbId?: string
+}
+
+/** GeneratedImage[] → StepAction이 기대하는 GenerationResult로 래핑 */
+function wrapAsGenerationResult(images: GeneratedImage[]): GenerationResult {
+  return {
+    data: {
+      anchors: images.map((img) => ({
+        id: img.id,
+        originalUrl: img.url,
+        category: img.category,
+        name: img.label,
+        dbId: img.dbId,
+      })),
+    },
+    generatedAt: new Date(),
+  }
+}
+
+/** StepAction의 GenerationResult → GeneratedImage[]로 변환 */
+function unwrapToGeneratedImages(result: GenerationResult | null): GeneratedImage[] {
+  if (!result) return []
+  const data = result.data as { data?: { anchors?: KidsAnchor[] }; anchors?: KidsAnchor[] }
+  const anchors = data?.data?.anchors || data?.anchors || []
+  return anchors.map((anchor) => ({
+    id: anchor.id,
+    url: anchor.originalUrl || '',
+    category: anchor.category,
+    label: anchor.name,
+    dbId: anchor.dbId,
+    isFavorite: false,
+  }))
 }
 
 // ============================================================
@@ -571,10 +618,15 @@ export function MediaChoiceStep({
   config,
   value,
   onChange,
-  onApprove,
   inputContext,
   projectId,
 }: MediaChoiceStepProps) {
+  // 모델 선택 상태
+  const { modelSelections, setModelSelection } = useWorkflowStore()
+  const selectedModel = config.modelSelection
+    ? (modelSelections[stepId] || config.modelSelection.defaultModelId)
+    : undefined
+
   const [selectedMode, setSelectedMode] = React.useState<Mode | null>(
     value?.mode || config.modes.find((m) => m.default)?.id || null
   )
@@ -587,6 +639,14 @@ export function MediaChoiceStep({
   const [generatedImages, setGeneratedImages] = React.useState<GeneratedImage[]>(
     value?.generated || []
   )
+
+  // Cleanup blob URLs on unmount to prevent memory leaks
+  React.useEffect(() => {
+    return () => {
+      uploadedFiles.forEach((f) => URL.revokeObjectURL(f.preview))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup only on unmount
+  }, [])
   const [progress, setProgress] = React.useState<GenerationProgress>({
     stepId,
     status: 'idle',
@@ -595,6 +655,7 @@ export function MediaChoiceStep({
     message: '',
   })
   const [error, setError] = React.useState<string | null>(null)
+  const isGeneratingRef = React.useRef(false)
 
   const _defaultMode = config.modes.find((m) => m.default)?.id || 'generate'
 
@@ -618,106 +679,65 @@ export function MediaChoiceStep({
     setStatus('reviewing')
   }
 
-  // Handle AI generation - calls actual API
+  // Adapted callbacks: StepAction 콜백 → MediaChoiceResult 변환
+  const buildAdaptedCallbacks = (): StepCallbacks => ({
+    setStatus: (s) => setStatus(s === 'idle' ? 'selecting' : s as StepStatus),
+    setProgress,
+    setError,
+    onChange: (genResult: GenerationResult | null) => {
+      const images = unwrapToGeneratedImages(genResult)
+      setGeneratedImages(images)
+      onChange({ mode: 'generate', generated: images })
+    },
+    setCompletedUrls: () => {},
+  })
+
+  // Handle AI generation via StepAction
   const handleGenerate = async () => {
-    setStatus('generating')
-    setError(null)
-
-    // Extract data from inputContext
-    const ctx = asKidsContext(inputContext)
-    const setupData = ctx.setup ?? DEFAULT_KIDS_SETUP
-    const scriptResult = unwrapStepResult(ctx.script)
-
-    const anchorPrompts = scriptResult?.anchorPrompts || []
-    const sessionId = scriptResult?.sessionId || `session-${Date.now()}`
-    const formFactor = setupData.formFactor || 'longform'
-    const style = setupData.style || 'pixar'
-
-    // If no anchor prompts, show error
-    if (anchorPrompts.length === 0) {
-      setError('앵커 프롬프트가 없습니다. 스크립트 단계를 먼저 완료해주세요.')
+    const action = getAction(config.generateAction || 'kids/anchors')
+    if (!action) {
+      setError('등록되지 않은 액션입니다')
       setStatus('failed')
       return
     }
 
-    const total = anchorPrompts.length
-    const items: GenerationProgressItem[] = anchorPrompts.map((ap) => ({
-      id: ap.id,
-      label: ap.name,
-      status: 'pending' as const,
-    }))
+    setStatus('generating')
+    setError(null)
+    isGeneratingRef.current = true
+
+    const kidsCtx = asKidsContext(inputContext)
+    const scriptResult = unwrapStepResult(kidsCtx.script)
+    const anchorPrompts = scriptResult?.anchorPrompts || []
 
     setProgress({
       stepId,
       status: 'generating',
       current: 0,
-      total,
+      total: anchorPrompts.length,
       message: '이미지 생성 준비 중...',
-      items,
+      items: anchorPrompts.map((ap) => ({
+        id: ap.id,
+        label: ap.name,
+        status: 'pending' as const,
+      })),
     })
 
     try {
-      // Call the actual anchors API
-      // 모든 항목을 processing 상태로 변경 (API가 한 번에 모든 이미지 생성)
-      setProgress((prev) => ({
-        ...prev,
-        message: 'API 호출 중...',
-        items: items.map((it) => ({
-          ...it,
-          status: 'processing' as const,
-        })),
-      }))
-
-      const response = await fetch('/api/kids-animation/anchors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          projectId: projectId || undefined,
-          anchorPrompts,
-          formFactor,
-          style,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `API 오류: ${response.status}`)
-      }
-
-      const result = await response.json()
-      const anchorsData = result.data || result
-
-      // Map API response to generated images
-      const generated: GeneratedImage[] = (anchorsData.anchors || []).map(
-        (anchor: { id: string; category: string; name: string; originalUrl?: string; dbId?: string }, idx: number) => ({
-          id: anchor.id,
-          url: anchor.originalUrl || `https://picsum.photos/seed/${anchor.id}-${idx}/512/512`,
-          category: anchor.category,
-          label: anchor.name,
-          dbId: anchor.dbId,
-          isFavorite: false,
-        })
-      )
-
-      setGeneratedImages(generated)
-      setProgress({
+      const actionCtx: StepActionContext = {
+        inputContext: inputContext || {},
+        sessionId: scriptResult?.sessionId || `session-${Date.now()}`,
+        projectId: projectId || null,
+        selectedModel,
         stepId,
-        status: 'completed',
-        current: total,
-        total,
-        message: '생성 완료',
-        items: items.map((it) => ({ ...it, status: 'completed' as const })),
-      })
-
-      onChange({
-        mode: 'generate',
-        generated,
-      })
-      setStatus('reviewing')
+        value: null,
+        config: { previewType: 'image-grid', generateAction: config.generateAction || 'kids/anchors' },
+      }
+      await action.execute(actionCtx, buildAdaptedCallbacks())
     } catch (err) {
       setError(err instanceof Error ? err.message : '생성에 실패했습니다')
       setStatus('failed')
+    } finally {
+      isGeneratingRef.current = false
     }
   }
 
@@ -728,26 +748,12 @@ export function MediaChoiceStep({
     handleGenerate()
   }
 
-  // Handle individual item regeneration
+  // Handle individual item regeneration via StepAction
   const handleRegenerateItem = async (itemId: string) => {
-    // Find the anchor prompt for this item
-    const regenCtx = asKidsContext(inputContext)
-    const regenSetup = regenCtx.setup ?? DEFAULT_KIDS_SETUP
-    const regenScriptResult = unwrapStepResult(regenCtx.script)
+    const action = getAction(config.generateAction || 'kids/anchors')
+    if (!action?.regenerateItem) return
 
-    const anchorPrompts = regenScriptResult?.anchorPrompts || []
-    const targetPrompt = anchorPrompts.find((ap) => ap.id === itemId)
-
-    if (!targetPrompt) {
-      console.error('Anchor prompt not found for item:', itemId)
-      return
-    }
-
-    const sessionId = regenScriptResult?.sessionId || `session-${Date.now()}`
-    const formFactor = regenSetup.formFactor || 'longform'
-    const style = regenSetup.style || 'pixar'
-
-    // Update UI to show loading for this item
+    // 로딩 표시
     setGeneratedImages((prev) =>
       prev.map((img) =>
         img.id === itemId ? { ...img, url: '' } : img
@@ -755,60 +761,28 @@ export function MediaChoiceStep({
     )
 
     try {
-      const response = await fetch('/api/kids-animation/anchors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          projectId: projectId || undefined,
-          anchorPrompts: [targetPrompt],
-          formFactor,
-          style,
-        }),
-      })
+      const kidsCtx = asKidsContext(inputContext)
+      const scriptResult = unwrapStepResult(kidsCtx.script)
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `API 오류: ${response.status}`)
+      const actionCtx: StepActionContext = {
+        inputContext: inputContext || {},
+        sessionId: scriptResult?.sessionId || `session-${Date.now()}`,
+        projectId: projectId || null,
+        selectedModel,
+        stepId,
+        value: wrapAsGenerationResult(generatedImages),
+        config: { previewType: 'image-grid', generateAction: config.generateAction || 'kids/anchors' },
       }
 
-      const result = await response.json()
-      const anchorsData = result.data || result
-      const regeneratedAnchor = anchorsData.anchors?.[0]
-
-      if (regeneratedAnchor) {
-        // Update the specific image
-        setGeneratedImages((prev) =>
-          prev.map((img) =>
-            img.id === itemId
-              ? {
-                  ...img,
-                  url: regeneratedAnchor.originalUrl || img.url,
-                  dbId: regeneratedAnchor.dbId || img.dbId,
-                  isFavorite: false, // 새로 생성된 이미지는 좋아요 초기화
-                }
-              : img
-          )
-        )
-
-        // Update the value for parent component
-        onChange({
-          mode: 'generate',
-          generated: generatedImages.map((img) =>
-            img.id === itemId
-              ? {
-                  ...img,
-                  url: regeneratedAnchor.originalUrl || img.url,
-                  dbId: regeneratedAnchor.dbId || img.dbId,
-                  isFavorite: false,
-                }
-              : img
-          ),
-        })
+      const adaptedCallbacks = {
+        ...buildAdaptedCallbacks(),
+        setRegeneratingItemId: () => {},
       }
+
+      await action.regenerateItem(itemId, undefined, actionCtx, adaptedCallbacks)
     } catch (err) {
       console.error('Regenerate failed:', err)
-      // Restore original image on error
+      // 에러 시 원본 복구
       const originalImage = value?.generated?.find((g) => g.id === itemId)
       if (originalImage) {
         setGeneratedImages((prev) =>
@@ -818,12 +792,6 @@ export function MediaChoiceStep({
         )
       }
     }
-  }
-
-  // Handle approve
-  const handleApprove = () => {
-    setStatus('approved')
-    onApprove?.()
   }
 
   // Check if can proceed with upload
@@ -847,8 +815,8 @@ export function MediaChoiceStep({
           status === 'reviewing' && 'border-solid'
         )}
       >
-        {/* Mode Selection - Always visible unless approved */}
-        {status !== 'approved' && status !== 'generating' && (
+        {/* Mode Selection - Always visible unless generating */}
+        {status !== 'generating' && (
           <ModeSelection
             modes={config.modes}
             selectedMode={selectedMode}
@@ -857,7 +825,7 @@ export function MediaChoiceStep({
         )}
 
         {/* Upload Mode Content */}
-        {selectedMode === 'upload' && status !== 'generating' && status !== 'approved' && (
+        {selectedMode === 'upload' && status !== 'generating' && (
           <div className="space-y-4">
             <UploadArea
               config={config.uploadConfig!}
@@ -886,7 +854,7 @@ export function MediaChoiceStep({
             )}
 
             {status === 'reviewing' && (
-              <div className="flex justify-center gap-3 pt-2">
+              <div className="flex justify-center pt-2">
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -896,13 +864,6 @@ export function MediaChoiceStep({
                   className="border-white/30 bg-transparent text-white hover:bg-white/10"
                 >
                   다시 선택
-                </Button>
-                <Button
-                  onClick={handleApprove}
-                  className="bg-gradient-to-r from-[var(--color-neon-lime)] to-[var(--color-neon-cyan)]"
-                >
-                  다음 단계
-                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
             )}
@@ -917,13 +878,22 @@ export function MediaChoiceStep({
                 스크립트를 기반으로 캐릭터와 배경 이미지를 자동 생성합니다
               </p>
             </div>
-            <Button
-              onClick={handleGenerate}
-              className="bg-gradient-to-r from-[var(--color-neon-pink)] to-[var(--color-neon-purple)] transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-[var(--color-neon-pink)]/30"
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              AI 생성 시작
-            </Button>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              {config.modelSelection && (
+                <WorkflowModelPopup
+                  config={config.modelSelection}
+                  value={selectedModel!}
+                  onChange={(id) => setModelSelection(stepId, id)}
+                />
+              )}
+              <Button
+                onClick={handleGenerate}
+                className="bg-gradient-to-r from-[var(--color-neon-pink)] to-[var(--color-neon-purple)] transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-[var(--color-neon-pink)]/30"
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                AI 생성 시작
+              </Button>
+            </div>
           </div>
         )}
 
@@ -954,7 +924,7 @@ export function MediaChoiceStep({
               onRegenerateItem={handleRegenerateItem}
             />
 
-            <div className="flex justify-center gap-3 pt-4">
+            <div className="flex justify-center pt-4">
               <Button
                 variant="outline"
                 onClick={handleRegenerate}
@@ -963,30 +933,6 @@ export function MediaChoiceStep({
                 <RotateCcw className="mr-2 h-4 w-4" />
                 전체 재생성
               </Button>
-              <Button
-                onClick={handleApprove}
-                className="bg-gradient-to-r from-[var(--color-neon-lime)] to-[var(--color-neon-cyan)]"
-              >
-                다음 단계
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Approved State */}
-        {status === 'approved' && (
-          <div className="flex flex-col items-center gap-3 py-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-neon-lime)]/20">
-              <Check className="h-8 w-8 text-[var(--color-neon-lime)]" />
-            </div>
-            <div className="text-center">
-              <p className="font-medium text-white">승인 완료</p>
-              <p className="mt-1 text-sm text-white/60">
-                {value?.mode === 'upload'
-                  ? `${uploadedFiles.length}개 이미지 업로드됨`
-                  : `${generatedImages.length}개 이미지 생성됨`}
-              </p>
             </div>
           </div>
         )}

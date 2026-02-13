@@ -222,6 +222,8 @@ export interface GenerationReviewStepConfig {
     estimatedTime?: boolean // 예상 시간 표시
   }
   downloadable?: boolean // 결과 다운로드 가능 여부
+  modelSelection?: ModelSelectionConfig
+  secondaryModelSelection?: ModelSelectionConfig  // audio: TTS + BGM
 }
 
 // Media Choice Step: 업로드 OR AI 생성 선택
@@ -244,6 +246,42 @@ export interface MediaChoiceStepConfig {
     show: boolean
     perItem?: boolean
   }
+  modelSelection?: ModelSelectionConfig
+}
+
+// Model Selection
+export interface ModelOptionMeta {
+  provider: string                       // "Google", "fal.ai", "Kie.ai", "ElevenLabs", "Suno"
+  quality: 'high' | 'standard'
+  speed: 'fast' | 'standard'
+  cost: 'low' | 'medium' | 'high'
+  badge?: string                         // "최신", "안정적"
+}
+
+export interface ModelConstraints {
+  maxRefImages?: number                          // undefined = 글로벌 상한(14)
+  resolutions?: ('1K' | '2K' | '4K')[]          // undefined = ['1K','2K','4K'] 전체
+  aspectRatios?: AspectRatio[]                   // undefined = 전체 비율, [] = 미지원
+  durations?: string[]                           // 비디오 duration (예: ['5', '10'])
+  videoResolutions?: string[]                    // 비디오 해상도 (예: ['720p', '1080p'])
+  supportsSound?: boolean                        // undefined = false (기본 숨김)
+  supportsEndFrame?: boolean                     // undefined = false (기본 숨김, I2V 전용)
+}
+
+export interface ModelOption {
+  id: string           // UI에서 사용하는 ID = 실제 API 모델 ID
+  label: string        // 사용자에게 표시
+  recommended?: boolean
+  featured?: boolean   // featured 플래그: 접힌 상태에서 기본 노출
+  description?: string
+  meta?: ModelOptionMeta
+  constraints?: ModelConstraints
+}
+
+export interface ModelSelectionConfig {
+  category: string
+  options: ModelOption[]
+  defaultModelId: string
 }
 
 export type WorkflowStepConfig =
@@ -461,6 +499,9 @@ export interface KidsShot {
   speechStyle?: string // 말투 스타일 (예: "soft and gentle", "excited and fast")
   speaker?: string // 화자 (캐릭터 이름 또는 "narrator")
   cameraMovement?: 'static' | 'pan' | 'zoom-in' | 'zoom-out' | 'tracking'
+  // 참조 이미지 매핑용
+  characters?: string[] // 등장 캐릭터 이름 배열
+  location?: string // 배경 장소명
   // Media URLs
   imageUrl?: string
   videoUrl?: string

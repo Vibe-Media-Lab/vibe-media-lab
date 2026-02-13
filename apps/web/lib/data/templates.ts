@@ -1,4 +1,5 @@
 import type { Template } from '@vibe-media-lab/shared'
+import { getModelSelectionConfigForWorkflow } from '@/lib/models/helpers'
 
 export const TEMPLATES: Template[] = [
   // ============================================================
@@ -107,6 +108,7 @@ export const TEMPLATES: Template[] = [
               show: true,
               perItem: true,
             },
+            modelSelection: getModelSelectionConfigForWorkflow('kids-animation', 'anchors', 'text-to-image'),
           },
         },
         {
@@ -124,6 +126,7 @@ export const TEMPLATES: Template[] = [
               perItem: true,
             },
             hint: '캐릭터: front, three_quarter, happy, sad | 배경: wide, medium',
+            modelSelection: getModelSelectionConfigForWorkflow('kids-animation', 'expand', 'image-to-image'),
           },
         },
         {
@@ -141,6 +144,7 @@ export const TEMPLATES: Template[] = [
               show: true,
               perItem: true,
             },
+            modelSelection: getModelSelectionConfigForWorkflow('kids-animation', 'shots', 'image-to-image'),
           },
         },
         {
@@ -158,6 +162,7 @@ export const TEMPLATES: Template[] = [
               perItem: true,
               estimatedTime: true,
             },
+            modelSelection: getModelSelectionConfigForWorkflow('kids-animation', 'videos', 'image-to-video'),
           },
         },
         {
@@ -177,6 +182,8 @@ export const TEMPLATES: Template[] = [
               show: true,
               perItem: true,
             },
+            modelSelection: getModelSelectionConfigForWorkflow('kids-animation', 'audio', 'tts'),
+            secondaryModelSelection: getModelSelectionConfigForWorkflow('kids-animation', 'audio:secondary', 'bgm'),
           },
         },
         {
