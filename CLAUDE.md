@@ -22,7 +22,11 @@ vibe-media-lab/
 │   │   ├── (auth)/                   # 로그인/회원가입
 │   │   ├── (dashboard)/              # 갤러리, 히스토리, 스튜디오
 │   │   ├── account/                  # 구독, 프로모코드, 워크스페이스
+│   │   ├── image/                    # ★ 이미지 생성 페이지
+│   │   ├── video/                    # ★ 비디오 생성 페이지
 │   │   ├── api/kids-animation/       # ★ 메인 파이프라인 API (8단계)
+│   │   ├── api/image/                # 이미지 생성/업로드 API
+│   │   ├── api/video/generate/       # 비디오 생성 API
 │   │   ├── api/library/              # 에셋 라이브러리 CRUD
 │   │   ├── api/projects/             # 프로젝트 관리
 │   │   ├── library/                  # 라이브러리 페이지
@@ -31,6 +35,8 @@ vibe-media-lab/
 │   │   ├── global-error.tsx          # Global Error Boundary
 │   │   └── layout.tsx                # 루트 레이아웃 (Toaster 포함)
 │   ├── components/
+│   │   ├── image-generate/           # ★ 이미지 생성 UI (prompt-bar, grid, model-selector)
+│   │   ├── video-generate/           # ★ 비디오 생성 UI (sidebar-form, model-selector, result)
 │   │   ├── templates/workflow/steps/ # ★ 워크플로우 UI 컴포넌트
 │   │   │   ├── generation-review/    # 생성→리뷰 스텝 (핵심)
 │   │   │   │   ├── generation-review-step.tsx  # 메인 컴포넌트 (567줄)
@@ -44,14 +50,14 @@ vibe-media-lab/
 │   │   │   └── kids-animation/types.ts  # Zod 스키마 (모든 API)
 │   │   ├── models/                      # ★ 멀티 프로바이더 모델 아키텍처
 │   │   │   ├── types.ts                 # ModelCapability, CatalogModel, EnabledConfig
-│   │   │   ├── catalog.ts              # 전체 모델 카탈로그 (19개)
+│   │   │   ├── catalog.ts              # 전체 모델 카탈로그 (43개)
 │   │   │   ├── enabled.ts              # 활성 모델 + featured + fallback 매핑
 │   │   │   ├── router.ts              # prefix 라우팅 + fallback chain
 │   │   │   ├── helpers.ts             # UI/Zod 변환 (getModelSelectionConfig)
 │   │   │   └── workflow-policies.ts   # 워크플로우별 모델 정책
 │   │   ├── constants/model-options.ts   # helpers.ts 위임 (하위 호환)
 │   │   ├── data/templates.ts            # 워크플로우 템플릿 정의
-│   │   ├── services/                    # ★ 비즈니스 로직 (16개 서비스)
+│   │   ├── services/                    # ★ 비즈니스 로직 (17개 서비스)
 │   │   ├── step-actions/                # ★ StepAction Registry (워크플로우 모듈화)
 │   │   │   ├── types.ts                 # StepAction 인터페이스
 │   │   │   ├── registry.ts             # side-effect import + assertAllRegistered
@@ -67,7 +73,10 @@ vibe-media-lab/
 │   │   │   │   ├── audio-action.ts     # TTS + BGM
 │   │   │   │   └── final-action.ts     # 최종 합성
 │   │   │   └── __tests__/              # 10개 테스트 파일 (136 케이스)
-│   │   ├── stores/workflow-store.ts     # Zustand 상태 + beforeunload flush
+│   │   ├── stores/
+│   │   │   ├── workflow-store.ts       # Zustand 워크플로우 상태 + beforeunload flush
+│   │   │   ├── image-generate-store.ts # 이미지 생성 페이지 상태
+│   │   │   └── video-generate-store.ts # 비디오 생성 페이지 상태
 │   │   ├── utils/                       # fetch-with-timeout, retry, mapper
 │   │   ├── security/                    # URL 검증 (SSRF 방어)
 │   │   └── supabase/                    # Supabase 클라이언트
@@ -130,10 +139,11 @@ story → script → anchors → expand → shots → videos → audio → final
 |------|------|---------|
 | `llm-service.ts` | 스토리/스크립트 LLM 생성 | Gemini 2.5 Flash |
 | `gemini-image-client.ts` | Gemini 이미지 생성/편집 (직접 API) | Gemini 3 Pro Image |
-| `image-service.ts` | 이미지 서비스 (Router 기반) | kieai (생성) / fal (편집) → Gemini (fallback) |
-| `kieai-client.ts` | Kie.ai API 클라이언트 (비디오/TTS/BGM) | Kie.ai |
-| `fal-client.ts` | fal.ai API 클라이언트 (비디오/TTS/이미지편집/합성) | fal.ai |
-| `video-service.ts` | 이미지→비디오 변환 (Router 기반) | Kling 2.6 (kieai) |
+| `image-service.ts` | 이미지 서비스 (Router 기반) | kieai/fal/gemini (T2I 9개 + I2I 9개) |
+| `kieai-client.ts` | Kie.ai API 클라이언트 (비디오/이미지/TTS/BGM) | Kie.ai |
+| `fal-client.ts` | fal.ai API 클라이언트 (비디오/이미지/TTS/합성) + FalTransport | fal.ai |
+| `video-service.ts` | 이미지→비디오 + 텍스트→비디오 (Router 기반) | kieai (13개) + fal (8개) |
+| `video-transport.ts` | 23개 비디오 모델별 API 분기 정의 | - |
 | `audio-service.ts` | TTS + BGM 생성 (Router 기반) | ElevenLabs (fal.ai 기본, kieai fallback) + Suno (kieai) |
 | `final-service.ts` | 최종 영상 합성 + Supabase 재업로드 | fal.ai (FFmpeg) |
 | `bgm-processor.ts` | BGM 볼륨 조정 (0.125), 페이드아웃 | fal.ai (FFmpeg) |
@@ -146,7 +156,7 @@ story → script → anchors → expand → shots → videos → audio → final
 3계층 분리로 모델 추가/제거를 `enabled.ts` 한 파일 수정으로 완료 가능:
 
 ```
-Catalog (전체 19개 모델) → Enabled (활성 + featured + fallback) → Router (런타임 라우팅)
+Catalog (전체 43개 모델) → Enabled (활성 + featured + fallback) → Router (런타임 라우팅)
 ```
 
 **Router fallback chain** (`router.ts`):
@@ -161,7 +171,8 @@ Catalog (전체 19개 모델) → Enabled (활성 + featured + fallback) → Rou
 |------------|----------|----------|----------|
 | text-to-image | `nano-banana-pro` | kieai ($0.09) | Gemini direct |
 | image-to-image | `fal-ai/nano-banana-pro/edit` | fal ($0.15) | Gemini direct |
-| image-to-video | `kling-2.6/image-to-video` | kieai ($0.28) | - |
+| image-to-video | `kling-2.6/image-to-video` | kieai ($0.28) | fal Kling 2.6 Pro |
+| text-to-video | `kling-2.6/text-to-video` | kieai ($0.28) | fal Kling v3 |
 | tts | `fal-ai/elevenlabs/tts/multilingual-v2` | fal ($0.007/70자) | kieai multilingual-v2 |
 | bgm | `V4_5` (Suno) | kieai | - |
 
@@ -203,6 +214,28 @@ WorkflowPolicy → StepModelPolicy[] → RouteOverrides → routeModel()
 | 샷 이미지 실패 | - | 개별 MAX_RETRIES=2 |
 
 모든 API 라우트는 `Promise.allSettled`로 병렬 실행 (504 방지).
+
+---
+
+## 이미지 생성 (`/image`)
+
+프롬프트 기반 이미지 생성/편집 페이지. T2I 9개 + I2I 9개 모델 지원.
+
+- **Store**: `image-generate-store.ts` — Zustand, 모델별 constraints 자동 교정
+- **API**: `POST /api/image/generate` — Router 기반 fal/kieai/gemini dispatch
+- **UI**: prompt-bar (해상도/비율 cycling + 참조카운터), model-selector-popup (ConstraintBadges), image-grid
+- **모델 제약조건**: `ModelConstraints` (maxRefImages/resolutions/aspectRatios) → 서버 400 검증
+
+## 비디오 생성 (`/video`)
+
+I2V 14개 + T2V 12개 모델 지원. VideoTransport 기반 dispatch.
+
+- **Store**: `video-generate-store.ts` — Zustand, mode(I2V/T2V) 전환, Start/End Frame 관리
+- **API**: `POST /api/video/generate` — Router + VideoTransport dispatch
+- **UI**: sidebar-form (Start/End Frame 나란히 배치, Duration 슬라이더, 적응형 옵션), model-selector-popup
+- **VideoTransport**: 23개 모델별 apiType/family/capabilities/defaultDuration 정의
+- **kieai 3개 API**: Standard (`/jobs/createTask`), Veo (`/veo/generate`), Runway (`/runway/generate`)
+- **중복 제거**: UI에서 fal 중복 모델 제거 (kieai 우선), fallback 매핑 유지
 
 ---
 
@@ -276,8 +309,9 @@ action 파일은 `../_action-map`에서 `registerAction` import. `registry.ts`�
 - **프레임워크**: Vitest 3 + happy-dom + @vitest/coverage-v8
 - **테스트 범위**:
   - `lib/step-actions/__tests__/` — 10개 파일, 136 케이스
-  - `lib/models/__tests__/` — 1개 파일, 38 케이스
-  - 총 174 케이스
+  - `lib/models/__tests__/` — 2개 파일, 100 케이스
+  - `lib/services/__tests__/` — 6개 파일, 66 케이스
+  - 총 302 케이스, 84%+ statement 커버리지
 - **실행**: `pnpm --filter web test` / `pnpm --filter web test:cov`
 - **설정**: `vitest.config.ts` + `vitest.setup.ts`
 - **주의**: shared 패키지 타입 변경 시 `cd packages/shared && pnpm build` 필수 (테스트에서 import하므로)
