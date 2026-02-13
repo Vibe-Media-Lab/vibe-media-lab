@@ -11,6 +11,8 @@ import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
   { href: '/explore', label: 'Explore' },
+  { href: '/image', label: 'Image' },
+  { href: '/video', label: 'Video' },
   { href: '/templates', label: 'Templates' },
   { href: '/pricing', label: 'Pricing' },
 ]
