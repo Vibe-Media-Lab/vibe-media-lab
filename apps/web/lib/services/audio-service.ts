@@ -1,7 +1,10 @@
 /**
  * Audio Generation Service
  *
- * ElevenLabs TTS + Suno BGM via Kie.ai
+ * Router 기반 멀티 프로바이더 라우팅
+ * - fal.ai: ElevenLabs TTS (multilingual-v2, turbo-v2.5)
+ * - kieai: ElevenLabs TTS + Suno BGM
+ *
  * @see https://docs.kie.ai/market/elevenlabs/text-to-speech-multilingual-v2
  * @see https://docs.kie.ai/suno-api/generate-music
  */
@@ -13,10 +16,20 @@ import {
   waitForMusic,
   isKieaiAvailable,
   KieaiError,
+  extractResultUrl,
 } from './kieai-client'
+import { falTextToSpeech, isFalAvailable } from './fal-client'
+import { TTS_MODELS } from '@/lib/constants/model-options'
+import {
+  routeModel,
+  buildResultMeta,
+  getManualFallback,
+  resolveProvider,
+  isProviderAvailable,
+} from '@/lib/models/router'
+import type { RouteResult } from '@/lib/models/router'
+import * as Sentry from '@sentry/nextjs'
 import { getLogger } from '@/lib/logger'
-
-const logger = getLogger('audio-service')
 import { saveToLibrary } from './library-saver'
 import { uploadMedia } from './supabase-storage'
 import type {
@@ -29,79 +42,187 @@ import type {
   BGMGenerationResult,
 } from './types'
 
-const IS_MOCK = !isKieaiAvailable()
+const logger = getLogger('audio-service')
+
+// fal 또는 kieai 중 하나라도 있으면 실제 서비스
+const IS_MOCK = !isFalAvailable() && !isKieaiAvailable()
 
 // ============================================================
-// Text to Speech (ElevenLabs)
+// Text to Speech — Router 기반
 // ============================================================
-
-const TTS_MAX_RETRIES = 3
-const TTS_RETRY_DELAY_MS = 2000
 
 export async function generateTTS(params: TTSParams): Promise<GenerationResult> {
   if (IS_MOCK) {
     return mockGenerateTTS(params)
   }
 
-  let lastError: string = 'TTS generation failed'
+  try {
+    return await generateTTSInternal(params)
+  } catch (error) {
+    Sentry.withScope((scope) => {
+      scope.setTag('service', 'tts-generation')
+      scope.setExtra('textLength', params.text.length)
+      scope.setExtra('model', params.model)
+      Sentry.captureException(error)
+    })
+    const message = error instanceof KieaiError ? error.message : 'TTS generation failed'
+    logger.error('TTS generation failed', {
+      error: message,
+      text: params.text.slice(0, 30) + '...',
+    })
+    return {
+      success: false,
+      error: message,
+    }
+  }
+}
 
-  for (let attempt = 1; attempt <= TTS_MAX_RETRIES; attempt++) {
-    try {
-      const result = await generateTTSInternal(params)
+/** provider 기반 동적 디스패치 — fallback에서도 올바른 구현체 호출 */
+function dispatchTTSGeneration(
+  params: TTSParams,
+  route: RouteResult,
+): Promise<GenerationResult> {
+  return route.provider === 'fal'
+    ? generateTTSViaFal(params, route)
+    : generateTTSViaKieai(params, route)
+}
 
-      // URL이 없으면 실패로 간주하고 재시도
-      if (!result.url) {
-        logger.warn('TTS generation returned no URL', {
-          attempt,
-          maxRetries: TTS_MAX_RETRIES,
-          text: params.text.slice(0, 30) + '...',
-        })
-        lastError = 'TTS generation returned no URL'
+async function generateTTSInternal(params: TTSParams): Promise<GenerationResult> {
+  const requestedModel = params.model || TTS_MODELS.defaultModelId
+  const route = routeModel(requestedModel, 'tts', params.routeOverrides)
+  const startTime = Date.now()
 
-        if (attempt < TTS_MAX_RETRIES) {
-          await sleep(TTS_RETRY_DELAY_MS * attempt) // 점진적 백오프
-          continue
-        }
-      }
-
-      if (attempt > 1) {
-        logger.info('TTS generation succeeded after retry', { attempt })
-      }
-
-      return result
-    } catch (error) {
-      lastError = error instanceof KieaiError ? error.message : 'TTS generation failed'
-
-      logger.warn('TTS generation attempt failed', {
-        attempt,
-        maxRetries: TTS_MAX_RETRIES,
-        error: lastError,
+  // 모든 provider 불가
+  if (!route) {
+    Sentry.withScope((scope) => {
+      scope.setFingerprint(['provider-unavailable', 'tts'])
+      scope.setTag('service', 'tts-generation')
+      scope.setLevel('error')
+      Sentry.captureMessage('All TTS providers unavailable', {
+        extra: { requestedModel },
       })
+    })
+    return { success: false, error: '사용 가능한 TTS 서비스가 없습니다.' }
+  }
 
-      if (attempt < TTS_MAX_RETRIES) {
-        await sleep(TTS_RETRY_DELAY_MS * attempt) // 점진적 백오프
+  // 1차 시도 — provider-aware dispatch
+  let result: GenerationResult = await dispatchTTSGeneration(params, route)
+
+  // 실패 시 fallback — route.modelId 기준, provider-aware dispatch
+  if (!result.success) {
+    const fallbackId = getManualFallback(route.modelId, 'tts', params.routeOverrides)
+    if (fallbackId) {
+      const fbProvider = resolveProvider(fallbackId)
+      if (isProviderAvailable(fbProvider)) {
+        logger.info('TTS falling back', { fallbackId, fbProvider, originalError: result.error })
+        const fbRoute: RouteResult = { modelId: fallbackId, provider: fbProvider, fallbackUsed: true }
+        const fbResult = await dispatchTTSGeneration(params, fbRoute)
+        fbResult.metadata = {
+          ...fbResult.metadata,
+          ...buildResultMeta(requestedModel, fbRoute, startTime),
+        }
+        return fbResult
       }
     }
   }
 
-  logger.error('TTS generation failed after all retries', {
-    maxRetries: TTS_MAX_RETRIES,
-    error: lastError,
-  })
+  // ResultMeta 병합
+  result.metadata = {
+    ...result.metadata,
+    ...buildResultMeta(requestedModel, route, startTime),
+  }
+  return result
+}
 
-  return {
-    success: false,
-    error: lastError,
+// ============================================================
+// TTS Provider Implementations
+// ============================================================
+
+async function generateTTSViaFal(
+  params: TTSParams,
+  route: RouteResult,
+): Promise<GenerationResult> {
+  try {
+    const result = await falTextToSpeech({
+      text: params.text,
+      voice: params.voice || 'Rachel',
+      model: route.modelId,
+      languageCode: params.languageCode || 'ko',
+      speed: params.speed,
+      stability: params.stability,
+      similarityBoost: params.similarityBoost,
+      style: params.style,
+    })
+
+    // fal URL 만료 방지 — Supabase Storage에 재업로드
+    let permanentUrl = result.url
+    if (params.userId) {
+      const audioBuffer = await downloadAudioForStorage(result.url)
+      if (audioBuffer) {
+        const uploadResult = await uploadMedia({
+          file: audioBuffer,
+          userId: params.userId,
+          mediaType: 'audio',
+          contentType: 'audio/mp3',
+        })
+        if (uploadResult.success && uploadResult.url) {
+          permanentUrl = uploadResult.url
+        }
+      }
+    }
+
+    const duration = estimateTTSDuration(params.text)
+
+    // Library 저장
+    if (permanentUrl && params.userId) {
+      await saveToLibrary({
+        userId: params.userId,
+        projectId: params.projectId,
+        mediaType: 'tts',
+        prompt: params.text,
+        outputUrl: permanentUrl,
+        provider: route.provider,
+        model: route.modelId,
+        durationSeconds: duration,
+        config: {
+          sessionId: params.sessionId,
+          voice: params.voice || 'Rachel',
+          languageCode: params.languageCode || 'ko',
+          ...params.metadata,
+        },
+      })
+    }
+
+    return {
+      success: true,
+      url: permanentUrl,
+      metadata: {
+        text: params.text.slice(0, 50) + (params.text.length > 50 ? '...' : ''),
+        voice: params.voice || 'Rachel',
+        languageCode: params.languageCode || 'ko',
+        estimatedDuration: duration,
+      },
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'fal TTS generation failed'
+    Sentry.withScope((scope) => {
+      scope.setTag('service', 'tts-generation')
+      scope.setTag('provider', 'fal')
+      scope.setExtra('model', route.modelId)
+      scope.setExtra('textLength', params.text.length)
+      Sentry.captureException(error)
+    })
+    logger.error('fal TTS generation failed', { error: message })
+    return { success: false, error: message }
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function generateTTSInternal(params: TTSParams): Promise<GenerationResult> {
+async function generateTTSViaKieai(
+  params: TTSParams,
+  route: RouteResult,
+): Promise<GenerationResult> {
   const taskId = await createTask(
-    'elevenlabs/text-to-speech-multilingual-v2',
+    route.modelId,
     {
       text: params.text,
       voice: params.voice || 'Rachel',
@@ -115,25 +236,24 @@ async function generateTTSInternal(params: TTSParams): Promise<GenerationResult>
 
   const result = await waitForTask(taskId, { maxWaitMs: 120000 })
 
-  // resultJson이 문자열일 수 있음 - 파싱 필요
-  let parsedResult = result.resultJson
-  if (typeof result.resultJson === 'string') {
-    try {
-      parsedResult = JSON.parse(result.resultJson)
-    } catch {
-      parsedResult = {}
-    }
-  }
+  const url = extractResultUrl(result.resultJson, `tts model=${route.modelId} taskId=${taskId}`)
 
-  const url =
-    parsedResult?.url ||
-    parsedResult?.audio_url ||
-    (parsedResult?.urls as string[])?.[0] ||
-    (parsedResult?.resultUrls as string[])?.[0]
+  if (!url) {
+    const error = `kieai TTS succeeded but returned no URL (model: ${route.modelId}, taskId: ${taskId})`
+    Sentry.withScope((scope) => {
+      scope.setTag('service', 'tts-generation')
+      scope.setTag('provider', 'kieai')
+      scope.setExtra('model', route.modelId)
+      scope.setExtra('taskId', taskId)
+      scope.setExtra('resultState', result.state)
+      Sentry.captureException(new Error(error))
+    })
+    return { success: false, error, taskId }
+  }
 
   const duration = estimateTTSDuration(params.text)
 
-  // 자동 Library 저장 (userId가 있을 때만)
+  // Library 저장 (route 기반 동적 값)
   if (url && params.userId) {
     await saveToLibrary({
       userId: params.userId,
@@ -141,8 +261,8 @@ async function generateTTSInternal(params: TTSParams): Promise<GenerationResult>
       mediaType: 'tts',
       prompt: params.text,
       outputUrl: url,
-      provider: 'kieai',
-      model: 'elevenlabs',
+      provider: route.provider,
+      model: route.modelId,
       durationSeconds: duration,
       config: {
         sessionId: params.sessionId,
@@ -169,7 +289,6 @@ async function generateTTSInternal(params: TTSParams): Promise<GenerationResult>
 async function mockGenerateTTS(params: TTSParams): Promise<GenerationResult> {
   await new Promise((resolve) => setTimeout(resolve, 1000))
 
-  // Mock placeholder audio URL for testing
   const mockAudioUrl = `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${Math.floor(Math.random() * 16) + 1}.mp3`
 
   return {
@@ -200,12 +319,10 @@ export async function batchGenerateTTS(
   const results: BatchGenerationResult['results'] = []
   const total = params.tasks.length
 
-  // Process sequentially for better error handling
   for (let i = 0; i < total; i++) {
     const task = params.tasks[i]
     if (!task) continue
 
-    // userId와 sessionId를 각 generateTTS 호출에 전달
     const result = await generateTTS({
       text: task.text,
       voice: task.voice,
@@ -251,7 +368,6 @@ async function mockBatchGenerateTTS(
 
     await new Promise((resolve) => setTimeout(resolve, 800))
 
-    // Mock placeholder audio URL for testing
     const mockAudioUrl = `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${(i % 16) + 1}.mp3`
 
     const result: GenerationResult = {
@@ -283,16 +399,15 @@ async function mockBatchGenerateTTS(
 }
 
 // ============================================================
-// BGM Generation (Suno)
+// BGM Generation (Suno — kieai 전용)
 // ============================================================
 
 /**
  * Download audio from URL for storage upload
- * This is called immediately after BGM generation when URL is still valid
  */
 async function downloadAudioForStorage(url: string): Promise<Buffer | null> {
   try {
-    logger.debug('Downloading BGM for storage', { url: url.slice(0, 50) + '...' })
+    logger.debug('Downloading audio for storage', { url: url.slice(0, 50) + '...' })
 
     const response = await fetch(url, {
       headers: {
@@ -303,7 +418,7 @@ async function downloadAudioForStorage(url: string): Promise<Buffer | null> {
     })
 
     if (!response.ok) {
-      logger.warn('BGM download failed', { status: response.status })
+      logger.warn('Audio download failed', { status: response.status })
       return null
     }
 
@@ -311,18 +426,18 @@ async function downloadAudioForStorage(url: string): Promise<Buffer | null> {
     const buffer = Buffer.from(arrayBuffer)
 
     if (buffer.length < 1000) {
-      logger.warn('BGM download returned too small data', { size: buffer.length })
+      logger.warn('Audio download returned too small data', { size: buffer.length })
       return null
     }
 
-    logger.debug('BGM downloaded for storage', {
+    logger.debug('Audio downloaded for storage', {
       size: buffer.length,
       sizeKB: Math.round(buffer.length / 1024),
     })
 
     return buffer
   } catch (error) {
-    logger.warn('BGM download error', {
+    logger.warn('Audio download error', {
       error: error instanceof Error ? error.message : 'Unknown error',
     })
     return null
@@ -332,6 +447,11 @@ async function downloadAudioForStorage(url: string): Promise<Buffer | null> {
 export async function generateBGM(params: BGMParams): Promise<BGMGenerationResult> {
   if (IS_MOCK) {
     logger.info('Using mock BGM generation')
+    return mockGenerateBGM(params)
+  }
+
+  // BGM은 현재 kieai 전용 — kieai 없으면 mock
+  if (!isKieaiAvailable()) {
     return mockGenerateBGM(params)
   }
 
@@ -360,7 +480,6 @@ export async function generateBGM(params: BGMParams): Promise<BGMGenerationResul
       },
     })
 
-    // Handle both new format (response.sunoData) and legacy format (data)
     const sunoData = result.response?.sunoData
     const legacyData = result.data
 
@@ -371,7 +490,6 @@ export async function generateBGM(params: BGMParams): Promise<BGMGenerationResul
       hasLegacyData: !!legacyData?.length,
     })
 
-    // Extract all valid tracks (Suno returns 2 tracks per request)
     const tracks: BGMTrack[] = []
 
     if (sunoData) {
@@ -389,7 +507,6 @@ export async function generateBGM(params: BGMParams): Promise<BGMGenerationResul
       }
     }
 
-    // Fallback to legacy format
     if (tracks.length === 0 && legacyData) {
       for (const track of legacyData) {
         if (track.audio_url) {
@@ -405,15 +522,13 @@ export async function generateBGM(params: BGMParams): Promise<BGMGenerationResul
 
     logger.info('BGM tracks extracted', { trackCount: tracks.length })
 
-    // userId가 있으면 Supabase Storage에 업로드하여 영구 URL 확보
+    // Supabase Storage 업로드 + Library 저장
     if (tracks.length > 0 && params.userId) {
       for (const track of tracks) {
         try {
-          // kie.ai URL에서 오디오 다운로드
           const audioBuffer = await downloadAudioForStorage(track.url)
 
           if (audioBuffer) {
-            // Supabase Storage에 업로드
             const uploadResult = await uploadMedia({
               file: audioBuffer,
               userId: params.userId,
@@ -427,19 +542,17 @@ export async function generateBGM(params: BGMParams): Promise<BGMGenerationResul
                 originalUrl: track.url.slice(0, 50) + '...',
                 permanentUrl: uploadResult.url.slice(0, 50) + '...',
               })
-              // 영구 URL로 교체
               track.url = uploadResult.url
             }
           }
         } catch (uploadError) {
-          // 업로드 실패해도 원본 URL 유지
           logger.warn('Failed to upload BGM to storage, keeping original URL', {
             trackId: track.id,
             error: uploadError instanceof Error ? uploadError.message : 'Unknown error',
           })
         }
 
-        // Library에 저장 (영구 URL 또는 원본 URL)
+        // BGM은 현재 kieai 전용
         await saveToLibrary({
           userId: params.userId,
           projectId: params.projectId,
@@ -470,6 +583,13 @@ export async function generateBGM(params: BGMParams): Promise<BGMGenerationResul
     const message =
       error instanceof KieaiError ? error.message : 'BGM generation failed'
 
+    Sentry.withScope((scope) => {
+      scope.setTag('service', 'bgm-generation')
+      scope.setTag('provider', 'kieai')
+      scope.setExtra('model', params.model || 'V4_5')
+      Sentry.captureException(error)
+    })
+
     logger.error('BGM generation error', {
       error: message,
       errorType: error instanceof KieaiError ? 'KieaiError' : 'Unknown',
@@ -487,7 +607,6 @@ export async function generateBGM(params: BGMParams): Promise<BGMGenerationResul
 async function mockGenerateBGM(_params: BGMParams): Promise<BGMGenerationResult> {
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
-  // Mock placeholder BGM URLs for testing (royalty-free music)
   return {
     success: true,
     tracks: [
@@ -515,8 +634,9 @@ export function isAudioServiceAvailable(): boolean {
   return !IS_MOCK
 }
 
-export function getAudioServiceProvider(): 'kieai' | 'mock' {
-  if (process.env.KIEAI_API_KEY) return 'kieai'
+export function getAudioServiceProvider(): 'fal' | 'kieai' | 'mock' {
+  if (isFalAvailable()) return 'fal'
+  if (isKieaiAvailable()) return 'kieai'
   return 'mock'
 }
 

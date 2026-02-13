@@ -4,6 +4,8 @@
  * Unified types for all media generation services
  */
 
+import type { RouteOverrides } from '@/lib/models/router'
+
 // ============================================================
 // Library Save Options (자동 저장용)
 // ============================================================
@@ -36,24 +38,51 @@ export type AspectRatio =
   | '21:9'
 
 export type ImageModel =
-  | 'nano-banana' // Gemini 2.5 Flash Image
-  | 'nano-banana-pro' // Gemini 3 Pro Image
+  // Legacy / Gemini
+  | 'nano-banana' // Gemini 2.5 Flash Image (kieai) — legacy
+  | 'nano-banana-pro' // Gemini 3 Pro Image (kieai)
+  | 'fal-ai/nano-banana-pro/edit' // Gemini 3 Pro Edit (fal.ai)
+  | 'gemini-3-pro-image-preview' // Direct Gemini API (fallback)
+  | 'gemini-2.5-flash-image' // Direct Gemini API (fallback)
+  // Flux 2 (BFL via fal)
+  | 'fal-ai/flux-2-pro'
+  | 'fal-ai/flux-2-pro/edit'
+  | 'fal-ai/flux-2-flex'
+  | 'fal-ai/flux-2-flex/edit'
+  | 'fal-ai/flux-2-max'
+  | 'fal-ai/flux-2-max/edit'
+  // Seedream (ByteDance via fal)
+  | 'fal-ai/bytedance/seedream/v4.5/text-to-image'
+  | 'fal-ai/bytedance/seedream/v4.5/edit'
+  | 'fal-ai/bytedance/seedream/v4/text-to-image'
+  | 'fal-ai/bytedance/seedream/v4/edit'
+  // GPT Image (OpenAI via fal)
+  | 'fal-ai/gpt-image-1.5'
+  | 'fal-ai/gpt-image-1.5/edit'
+  // Reve (fal)
+  | 'fal-ai/reve/text-to-image'
+  | 'fal-ai/reve/edit'
+  // Wan (Alibaba via fal)
+  | 'wan/v2.6/text-to-image'
+  | 'wan/v2.6/image-to-image'
 
 export type ImageResolution = '1K' | '2K' | '4K'
 
 export interface ImageGenerateParams extends LibrarySaveOptions {
   prompt: string
   aspectRatio?: AspectRatio
-  model?: ImageModel
+  model?: ImageModel | string
   resolution?: ImageResolution
+  routeOverrides?: RouteOverrides
 }
 
 export interface ImageEditParams extends LibrarySaveOptions {
   prompt: string
   referenceUrls: string[]
   aspectRatio?: AspectRatio
-  model?: ImageModel
+  model?: ImageModel | string
   resolution?: ImageResolution
+  routeOverrides?: RouteOverrides
 }
 
 export interface ImageBatchEditParams extends LibrarySaveOptions {
@@ -62,34 +91,37 @@ export interface ImageBatchEditParams extends LibrarySaveOptions {
     referenceUrls: string[]
   }>
   aspectRatio?: AspectRatio
-  model?: ImageModel
+  model?: ImageModel | string
   resolution?: ImageResolution
+  routeOverrides?: RouteOverrides
 }
 
 // ============================================================
 // Video Generation
 // ============================================================
 
-export type VideoDuration = '5' | '10'
-
-export type VideoModel =
-  | 'kling-2.6/image-to-video'
-  | 'kling-2.6/text-to-video'
+export type VideoDuration = string
 
 export interface ImageToVideoParams extends LibrarySaveOptions {
   imageUrl: string
   prompt: string
-  duration?: VideoDuration
-  aspectRatio?: '1:1' | '9:16' | '16:9'
+  duration?: string
+  aspectRatio?: string
   sound?: boolean
   tailImageUrl?: string
+  model?: string
+  resolution?: string
+  routeOverrides?: RouteOverrides
 }
 
 export interface TextToVideoParams extends LibrarySaveOptions {
   prompt: string
-  duration?: VideoDuration
-  aspectRatio?: '1:1' | '9:16' | '16:9'
+  duration?: string
+  aspectRatio?: string
   sound?: boolean
+  model?: string
+  resolution?: string
+  routeOverrides?: RouteOverrides
 }
 
 // ============================================================
@@ -122,15 +154,19 @@ export type TTSVoice =
 export type TTSModel =
   | 'elevenlabs/text-to-speech-turbo-2-5'
   | 'elevenlabs/text-to-speech-multilingual-v2'
+  | 'fal-ai/elevenlabs/tts/multilingual-v2'
+  | 'fal-ai/elevenlabs/tts/turbo-v2.5'
 
 export interface TTSParams extends LibrarySaveOptions {
   text: string
-  voice?: TTSVoice
+  voice?: TTSVoice | string // ElevenLabs voice ID도 허용
   languageCode?: string
   speed?: number
   stability?: number
   similarityBoost?: number
   style?: number
+  model?: string
+  routeOverrides?: RouteOverrides
 }
 
 export interface TTSBatchParams extends LibrarySaveOptions {
@@ -150,7 +186,7 @@ export type BGMModel = 'V3_5' | 'V4' | 'V4_5' | 'V4_5PLUS' | 'V5'
 export interface BGMParams extends LibrarySaveOptions {
   prompt: string
   instrumental?: boolean
-  model?: BGMModel
+  model?: BGMModel | string
   style?: string
   title?: string
 }
@@ -165,7 +201,13 @@ export interface GenerationResult {
   error?: string
   taskId?: string
   dbId?: string // Library에 저장된 레코드 ID
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown> & {
+    requestedModel?: string
+    actualModel?: string
+    actualProvider?: string
+    latencyMs?: number
+    fallbackUsed?: boolean
+  }
 }
 
 export interface BGMTrack {
@@ -199,7 +241,7 @@ export interface BatchGenerationResult {
 // Service Status
 // ============================================================
 
-export type ServiceProvider = 'kieai' | 'gemini' | 'mock'
+export type ServiceProvider = 'kieai' | 'gemini' | 'fal' | 'mock'
 
 export interface ServiceStatus {
   image: {
@@ -208,11 +250,11 @@ export interface ServiceStatus {
   }
   video: {
     available: boolean
-    provider: 'kieai' | 'mock'
+    provider: 'fal' | 'kieai' | 'mock'
   }
   audio: {
     available: boolean
-    provider: 'kieai' | 'mock'
+    provider: 'fal' | 'kieai' | 'mock'
   }
   llm: {
     available: boolean

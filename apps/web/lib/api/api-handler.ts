@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ZodError } from 'zod'
+import * as Sentry from '@sentry/nextjs'
 import { createClient } from '@/lib/supabase/server'
 import {
   ApiError,
@@ -46,6 +47,16 @@ export function createApiHandler<T>(
   return async (request: NextRequest) => {
     const requestContext = await getRequestContext()
     const { requestId } = requestContext
+    const endpoint = request.nextUrl.pathname
+    const startTime = Date.now()
+
+    // Sentry breadcrumb: 요청 시작
+    Sentry.addBreadcrumb({
+      category: 'api',
+      message: `${request.method} ${endpoint}`,
+      data: { requestId, endpoint },
+      level: 'info',
+    })
 
     try {
       const supabase = await createClient()
@@ -122,6 +133,8 @@ export function createApiHandler<T>(
         successResponse(result, { requestId }) as ApiSuccessResponse<T>
       )
     } catch (error) {
+      const elapsedMs = Date.now() - startTime
+
       if (error instanceof ZodError) {
         console.error(`[${requestId}] Validation error:`, JSON.stringify(error.errors, null, 2))
         const apiError = ApiError.fromZodError(error)
@@ -136,6 +149,16 @@ export function createApiHandler<T>(
       if (shouldLog) {
         console.error(`[${requestId}] Unhandled error:`, error)
       }
+
+      // Sentry 에러 보고 (예외 경계 지점에서만)
+      Sentry.withScope((scope) => {
+        scope.setTag('endpoint', endpoint)
+        scope.setTag('requestId', requestId)
+        scope.setTag('errorCode', apiError.code)
+        scope.setExtra('elapsedMs', elapsedMs)
+        scope.setExtra('statusCode', apiError.statusCode)
+        Sentry.captureException(error)
+      })
 
       return NextResponse.json(
         errorResponse(apiError, { requestId }),

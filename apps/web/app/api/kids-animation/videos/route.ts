@@ -1,6 +1,8 @@
-import { KIDS_FORM_FACTOR_PRESETS } from '@vibe-media-lab/shared'
-import { imageToVideo, saveToLibrary } from '@/lib/services'
+import { KIDS_FORM_FACTOR_PRESETS, ApiError } from '@vibe-media-lab/shared'
+import { imageToVideo, saveToLibrary, getVideoServiceProvider } from '@/lib/services'
 import { VideoRequestSchema } from '@/lib/api/kids-animation/types'
+import { VIDEO_MODELS } from '@/lib/constants/model-options'
+import { buildRouteOverrides } from '@/lib/models/helpers'
 import { getLogger } from '@/lib/logger'
 import { createApiHandler } from '@/lib/api'
 
@@ -14,7 +16,7 @@ export const maxDuration = 300
  *
  * 단일 비디오 생성 (이미지 → 비디오)
  *
- * Kling 2.6 API를 사용하여 샷 이미지를 비디오로 변환
+ * Primary: fal.ai Kling 2.6 Pro / Fallback: kieai Kling 2.6
  * - 클라이언트에서 순차적으로 호출
  * - 샷당 약 2-5분 소요
  */
@@ -23,7 +25,7 @@ export const POST = createApiHandler(
     const body = await request.json()
     const validated = VideoRequestSchema.parse(body)
 
-    const { sessionId, projectId, shot, formFactor = 'longform' } = validated
+    const { sessionId, projectId, shot, formFactor = 'longform', model } = validated
     const formFactorPreset = KIDS_FORM_FACTOR_PRESETS[formFactor]
     const userId = user.id
 
@@ -35,27 +37,34 @@ export const POST = createApiHandler(
     })
 
     // 비디오 생성
+    const videoStartTime = Date.now()
     const result = await imageToVideo({
       imageUrl: shot.imageUrl,
       prompt: shot.visualPrompt,
       duration: (shot.duration === 10 ? '10' : '5') as '5' | '10',
       aspectRatio: formFactorPreset.video.aspectRatio,
+      model,
+      routeOverrides: buildRouteOverrides('kids-animation', 'videos', 'image-to-video'),
     })
 
-    // 생성 실패 시 에러 데이터 반환 (200 — 클라이언트가 처리)
+    const videoElapsedMs = Date.now() - videoStartTime
+    logger.info('Video generation result', {
+      sessionId,
+      shotId: shot.id,
+      success: result.success,
+      elapsedMs: videoElapsedMs,
+    })
+
+    // 생성 실패 시 502 에러 반환 (클라이언트가 response.ok로 처리)
     if (!result.success) {
       logger.error('Video generation failed', {
         sessionId,
         shotId: shot.id,
         error: result.error,
+        elapsedMs: videoElapsedMs,
       })
 
-      return {
-        id: shot.id,
-        shotNumber: shot.shotNumber,
-        videoUrl: '',
-        error: result.error || '비디오 생성 실패',
-      }
+      throw ApiError.providerError(result.error || '비디오 생성 실패', getVideoServiceProvider())
     }
 
     const videoUrl = result.url || ''
@@ -76,8 +85,8 @@ export const POST = createApiHandler(
         mediaType: 'video',
         prompt: shot.visualPrompt,
         outputUrl: videoUrl,
-        provider: 'kieai',
-        model: 'kling-2.6/image-to-video',
+        provider: getVideoServiceProvider(),
+        model: model || VIDEO_MODELS.defaultModelId,
         durationSeconds: shot.duration || 10,
         config: {
           sessionId,

@@ -5,6 +5,33 @@ import type {
   KidsShot,
   KidsAnchor,
 } from '@vibe-media-lab/shared'
+import {
+  ALLOWED_TEXT_TO_IMAGE_MODELS,
+  ALLOWED_IMAGE_TO_IMAGE_MODELS,
+  ALLOWED_VIDEO_MODELS,
+  ALLOWED_TTS_MODELS,
+  ALLOWED_BGM_MODELS,
+} from '@/lib/constants/model-options'
+import { getStepPolicy } from '@/lib/models/workflow-policies'
+
+// Kids Animation 워크플로우 정책에서 허용 모델 추출 (전역과 격리)
+const KIDS_T2I_MODELS = (() => {
+  const p = getStepPolicy('kids-animation', 'anchors', 'text-to-image')
+  if (!p || p.allowedModels.length === 0) return ALLOWED_TEXT_TO_IMAGE_MODELS
+  return p.allowedModels as unknown as readonly [string, ...string[]]
+})()
+
+const KIDS_I2I_MODELS = (() => {
+  const p = getStepPolicy('kids-animation', 'expand', 'image-to-image')
+  if (!p || p.allowedModels.length === 0) return ALLOWED_IMAGE_TO_IMAGE_MODELS
+  return p.allowedModels as unknown as readonly [string, ...string[]]
+})()
+
+const KIDS_VIDEO_MODELS = (() => {
+  const p = getStepPolicy('kids-animation', 'videos', 'image-to-video')
+  if (!p || p.allowedModels.length === 0) return ALLOWED_VIDEO_MODELS
+  return p.allowedModels as unknown as readonly [string, ...string[]]
+})()
 
 // ============================================================
 // Request Schemas
@@ -101,6 +128,7 @@ export const AnchorsRequestSchema = z.object({
   })),
   formFactor: z.enum(['longform', 'shortform']).default('longform'),
   style: z.enum(['pixar', 'disney', 'dreamworks']).default('pixar'),
+  model: z.enum(KIDS_T2I_MODELS).optional(),
 })
 export type AnchorsRequest = z.infer<typeof AnchorsRequestSchema>
 
@@ -114,15 +142,29 @@ export const ShotsRequestSchema = z.object({
       duration: z.number(),
       narration: z.string(),
       visualPrompt: z.string(),
+      emotion: z.string().optional(),
+      speaker: z.string().optional(),
+      characters: z.array(z.string()).optional(),
+      location: z.string().optional(),
     })),
   }),
   anchors: z.array(z.object({
     id: z.string(),
     category: z.enum(['character', 'background']),
+    name: z.string(),
     url: z.string(),
   })),
+  expanded: z.array(z.object({
+    id: z.string(),
+    originalId: z.string(),
+    category: z.enum(['character', 'background']),
+    name: z.string(),
+    variation: z.string(),
+    url: z.string(),
+  })).optional().default([]),
   style: z.enum(['pixar', 'disney', 'dreamworks']).default('pixar'),
   formFactor: z.enum(['longform', 'shortform']).default('longform'),
+  model: z.enum(KIDS_I2I_MODELS).optional(),
 })
 export type ShotsRequest = z.infer<typeof ShotsRequestSchema>
 
@@ -138,6 +180,7 @@ export const VideoRequestSchema = z.object({
     visualPrompt: z.string(),
   }),
   formFactor: z.enum(['longform', 'shortform']).default('longform'),
+  model: z.enum(KIDS_VIDEO_MODELS).optional(),
 })
 export type VideoRequest = z.infer<typeof VideoRequestSchema>
 
@@ -180,6 +223,8 @@ export const AudioRequestSchema = z.object({
     title: z.string().optional(),
     imageUrl: z.string().optional(),
   })).optional(),
+  ttsModel: z.enum(ALLOWED_TTS_MODELS).optional(),
+  bgmModel: z.enum(ALLOWED_BGM_MODELS).optional(),
 })
 export type AudioRequest = z.infer<typeof AudioRequestSchema>
 
@@ -195,6 +240,7 @@ export const ExpandRequestSchema = z.object({
   // front/wide는 앵커 생성 단계에서 이미 생성되므로 기본값에서 제외
   characterVariations: z.array(z.enum(['three_quarter', 'happy', 'sad'])).optional(),
   backgroundVariations: z.array(z.enum(['medium'])).optional(),
+  model: z.enum(KIDS_I2I_MODELS).optional(),
 })
 export type ExpandRequest = z.infer<typeof ExpandRequestSchema>
 
@@ -247,7 +293,7 @@ export interface ScriptResponse {
 export interface AnchorsResponse {
   sessionId: string
   anchors: KidsAnchor[]
-  provider?: 'gemini' | 'kieai' | 'mock'
+  provider?: 'gemini' | 'kieai' | 'fal' | 'mock'
 }
 
 export interface ShotsResponse {
@@ -322,7 +368,7 @@ export interface ExpandedAnchor {
 export interface ExpandResponse {
   sessionId: string
   expanded: ExpandedAnchor[]
-  provider?: 'gemini' | 'kieai' | 'mock'
+  provider?: 'gemini' | 'kieai' | 'fal' | 'mock'
   stats: { total: number; success: number; failed: number }
 }
 

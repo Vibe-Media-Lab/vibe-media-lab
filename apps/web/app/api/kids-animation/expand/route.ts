@@ -1,6 +1,7 @@
 import { createApiHandler } from '@/lib/api'
 import { editImage, getImageServiceProvider } from '@/lib/services'
 import { KIDS_FORM_FACTOR_PRESETS } from '@vibe-media-lab/shared'
+import { buildRouteOverrides } from '@/lib/models/helpers'
 import { getLogger } from '@/lib/logger'
 import { ExpandRequestSchema, type ExpandedAnchor, type ExpandResponse } from '@/lib/api/kids-animation/types'
 
@@ -43,7 +44,7 @@ type BackgroundVariation = keyof typeof BACKGROUND_VARIATIONS
  * - Fallback: Kie.ai (nano-banana-pro)
  */
 export const POST = createApiHandler<ExpandResponse>(
-  async (request) => {
+  async (request, { user }) => {
     const body = await request.json()
     const validated = ExpandRequestSchema.parse(body)
 
@@ -54,7 +55,9 @@ export const POST = createApiHandler<ExpandResponse>(
       // front/wide는 앵커 원본을 사용하므로 제외
       characterVariations = ['three_quarter', 'happy', 'sad'],
       backgroundVariations = ['medium'],
+      model,
     } = validated
+    const routeOverrides = buildRouteOverrides('kids-animation', 'expand', 'image-to-image')
 
     // Get aspect ratios from form factor preset
     const preset = KIDS_FORM_FACTOR_PRESETS[formFactor]
@@ -62,13 +65,23 @@ export const POST = createApiHandler<ExpandResponse>(
     const backgroundAspectRatio = preset.anchor.background.aspectRatio
     const resolution = preset.resolution
 
+    // 유효한 URL이 있는 앵커만 확장 (생성 실패/mock URL 제외)
+    const validAnchors = anchors.filter((a) => {
+      if (!a.url || a.url.includes('picsum.photos')) {
+        logger.warn('Skipping anchor with invalid URL', { id: a.id, url: a.url?.slice(0, 50) })
+        return false
+      }
+      return true
+    })
+
     logger.debug('Processing anchors for expansion', {
-      count: anchors.length,
-      ids: anchors.map((a) => a.id),
+      count: validAnchors.length,
+      skipped: anchors.length - validAnchors.length,
+      ids: validAnchors.map((a) => a.id),
     })
 
     // 모든 변형 작업을 평탄화하여 병렬 실행
-    const tasks = anchors.flatMap((anchor) => {
+    const tasks = validAnchors.flatMap((anchor) => {
       const variations = anchor.category === 'character'
         ? characterVariations
         : backgroundVariations
@@ -88,6 +101,7 @@ export const POST = createApiHandler<ExpandResponse>(
 
     logger.debug('Parallel expansion tasks', { totalTasks: tasks.length })
 
+    const expandStartTime = Date.now()
     const results = await Promise.allSettled(
       tasks.map(async (task) => {
         const result = await editImage({
@@ -95,6 +109,10 @@ export const POST = createApiHandler<ExpandResponse>(
           referenceUrls: [task.anchor.url],
           aspectRatio: task.aspectRatio,
           resolution,
+          model,
+          routeOverrides,
+          userId: user.id,
+          sessionId,
         })
         return { task, result }
       })
@@ -150,6 +168,15 @@ export const POST = createApiHandler<ExpandResponse>(
       }
     }
 
+    const expandElapsedMs = Date.now() - expandStartTime
+    logger.info('Expand completed', {
+      sessionId,
+      totalTasks: tasks.length,
+      successCount,
+      failedCount,
+      elapsedMs: expandElapsedMs,
+    })
+
     return {
       sessionId,
       expanded,
@@ -164,5 +191,5 @@ export const POST = createApiHandler<ExpandResponse>(
   { rateLimit: { maxRequests: 10, windowMs: 60_000 } }
 )
 
-// 앵커 확장은 여러 이미지를 순차적으로 생성하므로 긴 시간 필요
+// 앵커 확장은 병렬 생성하지만 태스크 수에 따라 시간 소요
 export const maxDuration = 300

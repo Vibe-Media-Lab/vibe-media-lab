@@ -1,10 +1,10 @@
 import { createApiHandler } from '@/lib/api'
 import { generateTTS, generateBGM, estimateTTSDuration } from '@/lib/services'
-import type { TTSVoice } from '@/lib/services'
 import {
   AudioRequestSchema,
   type AudioResponse,
 } from '@/lib/api/kids-animation/types'
+import { buildRouteOverrides } from '@/lib/models/helpers'
 import { getLogger } from '@/lib/logger'
 
 const logger = getLogger('api/kids-animation/audio')
@@ -23,7 +23,7 @@ export const POST = createApiHandler<AudioResponse>(
     const body = await request.json()
     const validated = AudioRequestSchema.parse(body)
 
-    const { sessionId, projectId, shots, bgmPrompt, bgmDirection, existingTts, existingBgm } = validated
+    const { sessionId, projectId, shots, bgmPrompt, bgmDirection, existingTts, existingBgm, ttsModel, bgmModel } = validated
 
     // 총 영상 길이 계산 (샷 수 × 10초)
     const totalDurationSec = shots.length * 10
@@ -78,15 +78,17 @@ export const POST = createApiHandler<AudioResponse>(
 
       const result = await generateTTS({
         text: shot.narration,
-        voice: 'Rachel' as TTSVoice,
+        voice: 'Lb7qkOn5hF8p7qfCDH8q',
         languageCode: 'ko',
-        speed: 0.9,           // 천천히 또박또박
-        stability: 0.65,      // 일관된 톤 유지
-        similarityBoost: 0.8, // 자연스러운 음성
-        style: 0.35,          // 약간의 표현력 (동화책 느낌)
+        speed: 1,             // 기본 속도
+        stability: 0.35,      // 낮춰서 생동감 있는 톤
+        similarityBoost: 0.75, // 자연스러운 음성
+        style: 0.6,           // 높여서 동화 구연 느낌
+        model: ttsModel,
         userId: user.id,
         projectId,
         sessionId,
+        routeOverrides: buildRouteOverrides('kids-animation', 'audio', 'tts'),
       })
 
       ttsResults.push({
@@ -126,6 +128,7 @@ export const POST = createApiHandler<AudioResponse>(
       const bgmResult = await generateBGM({
         prompt: finalBgmPrompt,
         instrumental: true,
+        model: bgmModel,
         style: 'children music, orchestral, cheerful, happy, playful, whimsical',
         userId: user.id,
         projectId,

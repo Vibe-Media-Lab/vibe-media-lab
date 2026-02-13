@@ -2,7 +2,17 @@ import { z } from 'zod'
 import { createApiHandler } from '@/lib/api'
 import { KIDS_ANIMATION_STYLES, KIDS_FORM_FACTOR_PRESETS } from '@vibe-media-lab/shared'
 import { editImage } from '@/lib/services'
+import { buildRouteOverrides } from '@/lib/models/helpers'
 import { getLogger } from '@/lib/logger'
+import { sanitizeAnchorUrls } from '@/lib/utils/shot-anchor-mapper'
+import { ALLOWED_IMAGE_TO_IMAGE_MODELS } from '@/lib/constants/model-options'
+import { getStepPolicy } from '@/lib/models/workflow-policies'
+
+const KIDS_I2I_MODELS = (() => {
+  const p = getStepPolicy('kids-animation', 'shots', 'image-to-image')
+  if (!p || p.allowedModels.length === 0) return ALLOWED_IMAGE_TO_IMAGE_MODELS
+  return p.allowedModels as unknown as readonly [string, ...string[]]
+})()
 
 const logger = getLogger('api/kids-animation/shots/regenerate')
 
@@ -16,6 +26,7 @@ const ShotRegenerateSchema = z.object({
   anchorUrls: z.array(z.string()),
   style: z.enum(['pixar', 'disney', 'dreamworks']).default('pixar'),
   formFactor: z.enum(['longform', 'shortform']).default('longform'),
+  model: z.enum(KIDS_I2I_MODELS).optional(),
 })
 
 interface ShotRegenerateResponse {
@@ -33,9 +44,13 @@ export const POST = createApiHandler<ShotRegenerateResponse>(
     const body = await request.json()
     const validated = ShotRegenerateSchema.parse(body)
 
-    const { sessionId, projectId, shotId, visualPrompt, anchorUrls, style, formFactor } = validated
+    const { sessionId, projectId, shotId, visualPrompt, anchorUrls: rawAnchorUrls, style, formFactor, model } = validated
     const styleConfig = KIDS_ANIMATION_STYLES[style]
     const formFactorPreset = KIDS_FORM_FACTOR_PRESETS[formFactor]
+    const routeOverrides = buildRouteOverrides('kids-animation', 'shots', 'image-to-image')
+
+    // error=true URL 및 빈 URL 필터링
+    const anchorUrls = sanitizeAnchorUrls(rawAnchorUrls)
 
     // visualPrompt에 이미 스타일 접미사가 포함되어 있으면 이중 추가 방지
     const suffix = styleConfig.visualPromptSuffix
@@ -69,6 +84,8 @@ export const POST = createApiHandler<ShotRegenerateResponse>(
         referenceUrls: anchorUrls,
         aspectRatio: formFactorPreset.shot.aspectRatio,
         resolution: formFactorPreset.shot.resolution,
+        model,
+        routeOverrides,
         userId: user.id,
         projectId,
         sessionId,

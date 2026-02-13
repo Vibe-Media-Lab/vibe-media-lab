@@ -21,6 +21,8 @@ import {
   KIDS_VOICE_PROFILES,
 } from '@vibe-media-lab/shared'
 import { getLogger } from '@/lib/logger'
+import { fetchWithTimeout } from '@/lib/utils/fetch-with-timeout'
+import { retryWithBackoff } from '@/lib/utils/retry-with-backoff'
 
 // Re-export ActKey for route.ts
 export type { ActKey }
@@ -65,6 +67,8 @@ export interface GeneratedScript {
     speechStyle?: string
     speaker?: string
     cameraMovement?: 'static' | 'pan' | 'zoom-in' | 'zoom-out' | 'tracking'
+    characters?: string[]
+    location?: string
   }>
   bgmPrompt: string
 }
@@ -78,44 +82,59 @@ async function callGemini(prompt: string): Promise<string> {
     throw new Error('GEMINI_API_KEY is not configured')
   }
 
-  const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  return retryWithBackoff(
+    async () => {
+      const response = await fetchWithTimeout(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        timeoutMs: 90000,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 16384,
+            responseMimeType: 'application/json',
+          },
+        }),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.text()
+        logger.error('Gemini API request failed', {
+          status: response.status,
+          statusText: response.statusText,
+          errorBody: errorBody.slice(0, 500),
+        })
+        throw new Error(`Gemini API error: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+      if (!text) {
+        logger.error('No text in Gemini response', {
+          hasCandidate: !!data.candidates?.[0],
+          hasContent: !!data.candidates?.[0]?.content,
+        })
+        throw new Error('No response from Gemini')
+      }
+
+      return text
     },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 16384,
-        responseMimeType: 'application/json',
+    {
+      maxRetries: 2,
+      onRetry: (error, attempt, delayMs) => {
+        logger.warn('Gemini LLM API retry', {
+          attempt,
+          delayMs,
+          error: error instanceof Error ? error.message : String(error),
+        })
       },
-    }),
-  })
-
-  if (!response.ok) {
-    const errorBody = await response.text()
-    logger.error('Gemini API request failed', {
-      status: response.status,
-      statusText: response.statusText,
-      errorBody: errorBody.slice(0, 500),
-    })
-    throw new Error(`Gemini API error: ${response.status} ${response.statusText}`)
-  }
-
-  const data = await response.json()
-
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-
-  if (!text) {
-    logger.error('No text in Gemini response', {
-      hasCandidate: !!data.candidates?.[0],
-      hasContent: !!data.candidates?.[0]?.content,
-    })
-    throw new Error('No response from Gemini')
-  }
-
-  return text
+    }
+  )
 }
 
 function extractJSON<T>(text: string): T {
@@ -515,6 +534,22 @@ export async function generateScript(
     ? `\n## 캐릭터:\n${formatCharactersForPrompt(story.characters)}`
     : ''
 
+  // 캐릭터 이름 목록 (정확한 매칭을 위해)
+  const characterNames = isEnhancedStory(story)
+    ? story.characters.map(c => c.name)
+    : []
+  const characterNamesList = characterNames.length > 0
+    ? `\n사용 가능한 캐릭터 이름: ${characterNames.map(n => `"${n}"`).join(', ')}`
+    : ''
+
+  // 장소 목록
+  const locationNames = isEnhancedStory(story) && story.setting?.mainLocations
+    ? story.setting.mainLocations
+    : []
+  const locationNamesList = locationNames.length > 0
+    ? `\n사용 가능한 장소: ${locationNames.map(n => `"${n}"`).join(', ')}`
+    : ''
+
   // 플롯 정보
   const plotInfo = formatPlotForPrompt(story.plot)
 
@@ -532,6 +567,8 @@ ${charactersInfo}
 ${plotInfo}
 
 ## 스타일: ${params.style} - ${styleConfig.description}
+${characterNamesList}
+${locationNamesList}
 
 ## 출력 형식 (JSON)
 
@@ -552,7 +589,9 @@ ${plotInfo}
       "voiceId": "Rachel",
       "speechStyle": "warm storytelling tone",
       "speaker": "narrator",
-      "cameraMovement": "static"
+      "cameraMovement": "static",
+      "characters": ["캐릭터1"],
+      "location": "장소명"
     }
   ],
   "bgmPrompt": "전체 영상에 어울리는 BGM 영어 프롬프트"
@@ -584,7 +623,13 @@ ${plotInfo}
 
 7. **narration**: 한국어, 3-7세가 이해할 수 있게, **반드시 40-50자** (동화책 읽어주듯 천천히 10초 분량)
 
-8. **bgmPrompt**: 영어, 아동용 애니메이션 BGM 프롬프트
+8. **characters**: 이 샷에 등장하는 캐릭터 이름 배열 (위의 캐릭터 이름 목록에서 정확히 선택)
+   - 캐릭터 없는 순수 배경 샷은 빈 배열 []
+   - speaker가 캐릭터인 경우 반드시 포함
+
+9. **location**: 이 샷의 배경 장소 (위의 장소 목록에서 정확히 하나 선택)
+
+10. **bgmPrompt**: 영어, 아동용 애니메이션 BGM 프롬프트
    - 필수 포함: 장르/분위기, 스토리 감정 흐름 (hopeful→surprised→adventurous→sad→brave→joyful)
    - **필수**: "Keep it short, around 1 minute (70 seconds). Do not exceed 80 seconds." 문구 포함
    - 조건: instrumental only, 3-7세 적합, ${styleConfig.description} 스타일
@@ -704,6 +749,10 @@ async function mockGenerateScript(
       speechStyle: speechStyleMap[emotion],
       speaker: 'narrator' as const,
       cameraMovement: cameraMovements[safeIndex] ?? 'static',
+      characters: characters.slice(0, Math.min(2, characters.length)).map(c => c.name),
+      location: isEnhanced && story.setting?.mainLocations?.[safeIndex % (story.setting.mainLocations.length || 1)]
+        ? story.setting.mainLocations[safeIndex % story.setting.mainLocations.length]
+        : undefined,
     }
   })
 

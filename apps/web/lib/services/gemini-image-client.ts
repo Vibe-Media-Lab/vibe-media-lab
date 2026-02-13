@@ -9,12 +9,18 @@
 
 import { getLogger } from '@/lib/logger'
 import { validateFetchUrl } from '@/lib/security/validate-url'
+import { fetchWithTimeout, FetchTimeoutError } from '@/lib/utils/fetch-with-timeout'
+import { retryWithBackoff } from '@/lib/utils/retry-with-backoff'
 
 const logger = getLogger('gemini-image-client')
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const GEMINI_IMAGE_MODEL = 'gemini-3-pro-image-preview'
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`
+const DEFAULT_GEMINI_IMAGE_MODEL = 'gemini-3-pro-image-preview'
+
+function getGeminiImageApiUrl(model?: string): string {
+  const m = model || DEFAULT_GEMINI_IMAGE_MODEL
+  return `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`
+}
 
 // ============================================================
 // Types
@@ -38,6 +44,7 @@ export interface GeminiImageGenerateParams {
   prompt: string
   aspectRatio?: GeminiAspectRatio
   imageSize?: GeminiImageSize
+  model?: string
 }
 
 export interface GeminiImageEditParams {
@@ -48,6 +55,7 @@ export interface GeminiImageEditParams {
   }>
   aspectRatio?: GeminiAspectRatio
   imageSize?: GeminiImageSize
+  model?: string
 }
 
 export interface GeminiImageResult {
@@ -122,6 +130,7 @@ async function callGeminiImage(
   config: {
     aspectRatio?: GeminiAspectRatio
     imageSize?: GeminiImageSize
+    model?: string
   } = {}
 ): Promise<GeminiImageResult> {
   const apiKey = getApiKey()
@@ -149,7 +158,10 @@ async function callGeminiImage(
     })) || []
   const textParts = contents[0]?.parts?.filter(p => p.text).map(p => p.text?.slice(0, 100)) || []
 
+  const apiUrl = getGeminiImageApiUrl(config.model)
+
   logger.info('Calling Gemini Image API', {
+    model: config.model || DEFAULT_GEMINI_IMAGE_MODEL,
     aspectRatio: config.aspectRatio,
     imageSize: config.imageSize,
     refImageCount: refImageStats.length,
@@ -157,28 +169,66 @@ async function callGeminiImage(
     textPreview: textParts,
   })
 
-  const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const data: GeminiResponse = await retryWithBackoff(
+    async () => {
+      const response = await fetchWithTimeout(`${apiUrl}?key=${apiKey}`, {
+        method: 'POST',
+        timeoutMs: 120000,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.text()
+        logger.error('Gemini Image API error', {
+          status: response.status,
+          statusText: response.statusText,
+        })
+        throw new GeminiImageError(
+          `Gemini API error: ${response.status} ${response.statusText}`,
+          response.status,
+          errorBody
+        )
+      }
+
+      const json: GeminiResponse = await response.json()
+
+      // finishReason: OTHER는 재시도 가능
+      const candidate = json.candidates?.[0]
+      if (candidate?.finishReason === 'OTHER' && !candidate?.content?.parts?.length) {
+        throw new GeminiImageError(
+          `Gemini returned finishReason: OTHER`,
+          undefined,
+          { finishReason: 'OTHER' }
+        )
+      }
+
+      return json
     },
-    body: JSON.stringify(requestBody),
-  })
-
-  if (!response.ok) {
-    const errorBody = await response.text()
-    logger.error('Gemini Image API error', {
-      status: response.status,
-      statusText: response.statusText,
-    })
-    throw new GeminiImageError(
-      `Gemini API error: ${response.status} ${response.statusText}`,
-      response.status,
-      errorBody
-    )
-  }
-
-  const data: GeminiResponse = await response.json()
+    {
+      maxRetries: 1,
+      shouldRetry: (error) => {
+        // 타임아웃 재시도
+        if (error instanceof FetchTimeoutError) return true
+        if (error instanceof GeminiImageError) {
+          // finishReason: OTHER 재시도
+          if (error.message.includes('finishReason: OTHER')) return true
+          // 5xx 에러 재시도
+          if (error.status && error.status >= 500) return true
+        }
+        return false
+      },
+      onRetry: (error, attempt, delayMs) => {
+        logger.warn('Gemini Image API retry', {
+          attempt,
+          delayMs,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      },
+    }
+  )
 
   if (data.error) {
     throw new GeminiImageError(
@@ -264,6 +314,7 @@ export async function generateImageFromText(
   return callGeminiImage(contents, {
     aspectRatio: params.aspectRatio,
     imageSize: params.imageSize,
+    model: params.model,
   })
 }
 
@@ -303,6 +354,7 @@ export async function generateImageFromReference(
   return callGeminiImage(contents, {
     aspectRatio: params.aspectRatio,
     imageSize: params.imageSize,
+    model: params.model,
   })
 }
 
@@ -356,7 +408,7 @@ export async function urlToBase64(
 
   // Handle remote URLs — SSRF 방어
   validateFetchUrl(url, { endpoint: 'gemini-image-client/urlToBase64' })
-  const response = await fetch(url)
+  const response = await fetchWithTimeout(url, { timeoutMs: 45000 })
 
   if (!response.ok) {
     throw new GeminiImageError(`Failed to fetch image: ${url}`)

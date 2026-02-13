@@ -77,6 +77,8 @@ export const POST = createApiHandler<ScriptResponse>(
         speechStyle: shot.speechStyle,
         speaker: shot.speaker,
         cameraMovement: shot.cameraMovement,
+        characters: shot.characters,
+        location: shot.location,
       })),
       bgmPrompt: generatedScript.bgmPrompt,
     }

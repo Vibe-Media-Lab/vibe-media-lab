@@ -5,6 +5,7 @@ import {
   AnchorsRequestSchema,
   type AnchorsResponse,
 } from '@/lib/api/kids-animation/types'
+import { buildRouteOverrides } from '@/lib/models/helpers'
 import { getLogger } from '@/lib/logger'
 
 const logger = getLogger('kids-animation/anchors')
@@ -33,62 +34,87 @@ export const POST = createApiHandler<AnchorsResponse>(
       promptCount: validated.anchorPrompts?.length,
     })
 
-    const { sessionId, projectId, anchorPrompts, formFactor = 'longform', style } = validated
+    const { sessionId, projectId, anchorPrompts, formFactor = 'longform', style, model } = validated
     const styleConfig = KIDS_ANIMATION_STYLES[style]
     const formFactorPreset = KIDS_FORM_FACTOR_PRESETS[formFactor]
+    const routeOverrides = buildRouteOverrides('kids-animation', 'anchors', 'text-to-image')
 
-    const anchors = []
+    // 병렬 실행으로 타임아웃 방지
+    const startTime = Date.now()
+    const settled = await Promise.allSettled(
+      anchorPrompts.map(async (anchorPrompt) => {
+        const aspectRatio = anchorPrompt.category === 'character'
+          ? formFactorPreset.anchor.character.aspectRatio
+          : formFactorPreset.anchor.background.aspectRatio
 
-    for (const anchorPrompt of anchorPrompts) {
-      // Determine aspect ratio based on category
-      const aspectRatio = anchorPrompt.category === 'character'
-        ? formFactorPreset.anchor.character.aspectRatio
-        : formFactorPreset.anchor.background.aspectRatio
+        const resolution = formFactorPreset.resolution
+        const fullPrompt = `${anchorPrompt.prompt}. ${styleConfig.visualPromptSuffix}`
 
-      const resolution = formFactorPreset.resolution
-
-      // Build full prompt with style suffix
-      const fullPrompt = `${anchorPrompt.prompt}. ${styleConfig.visualPromptSuffix}`
-
-      logger.debug('Generating anchor image', {
-        category: anchorPrompt.category,
-        name: anchorPrompt.name,
-        aspectRatio,
-        resolution,
-      })
-
-      // Generate image (userId 전달하면 자동으로 Library에 저장됨)
-      const result = await generateImage({
-        prompt: fullPrompt,
-        aspectRatio,
-        resolution,
-        userId: user.id,
-        projectId,
-        sessionId,
-        metadata: {
-          anchorId: anchorPrompt.id,
+        logger.debug('Generating anchor image', {
           category: anchorPrompt.category,
           name: anchorPrompt.name,
-          style,
-        },
-      })
+          aspectRatio,
+          resolution,
+        })
 
-      logger.debug('Anchor generation result', {
-        id: anchorPrompt.id,
-        success: result.success,
-        hasUrl: !!result.url,
-      })
+        const result = await generateImage({
+          prompt: fullPrompt,
+          aspectRatio,
+          resolution,
+          model,
+          routeOverrides,
+          userId: user.id,
+          projectId,
+          sessionId,
+          metadata: {
+            anchorId: anchorPrompt.id,
+            category: anchorPrompt.category,
+            name: anchorPrompt.name,
+            style,
+          },
+        })
 
-      anchors.push({
-        id: anchorPrompt.id,
-        category: anchorPrompt.category,
-        name: anchorPrompt.name,
-        description: anchorPrompt.prompt,
-        originalUrl: result.success ? result.url : undefined,
-        dbId: result.dbId, // Library에 저장된 레코드 ID
-        expandedUrls: [], // Will be filled by expand step
+        logger.debug('Anchor generation result', {
+          id: anchorPrompt.id,
+          success: result.success,
+          hasUrl: !!result.url,
+        })
+
+        return {
+          id: anchorPrompt.id,
+          category: anchorPrompt.category,
+          name: anchorPrompt.name,
+          description: anchorPrompt.prompt,
+          originalUrl: result.success ? result.url : undefined,
+          dbId: result.dbId,
+          expandedUrls: [],
+        }
       })
-    }
+    )
+
+    const anchors = settled.map((s, i) => {
+      if (s.status === 'fulfilled') return s.value
+      const prompt = anchorPrompts[i]!
+      logger.error('Anchor generation threw', {
+        id: prompt.id,
+        error: String(s.reason),
+      })
+      return {
+        id: prompt.id,
+        category: prompt.category,
+        name: prompt.name,
+        description: prompt.prompt,
+        originalUrl: undefined,
+        dbId: undefined,
+        expandedUrls: [],
+      }
+    })
+
+    logger.info('All anchors generated', {
+      total: anchors.length,
+      success: anchors.filter(a => a.originalUrl).length,
+      elapsedMs: Date.now() - startTime,
+    })
 
     return {
       sessionId,
