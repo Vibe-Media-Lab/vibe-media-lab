@@ -12,7 +12,7 @@ import { ALLOWED_LLM_MODELS, LLM_MODELS } from '@/lib/constants/model-options'
 
 // 강타입 (localStorage 오염 방지)
 type LlmModelId = (typeof ALLOWED_LLM_MODELS)[number]
-const DEFAULT_LLM_MODEL: LlmModelId = (LLM_MODELS.defaultModelId || 'gemini-2.5-flash') as LlmModelId
+const DEFAULT_LLM_MODEL: LlmModelId = (LLM_MODELS.defaultModelId || 'gemini-3-flash-preview') as LlmModelId
 
 // ============================================================
 // Types

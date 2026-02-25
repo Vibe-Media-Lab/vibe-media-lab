@@ -33,7 +33,7 @@ const logger = getLogger('myeongpan-service')
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const IS_MOCK = !GEMINI_API_KEY
-const DEFAULT_LLM_MODEL = LLM_MODELS.defaultModelId || 'gemini-2.5-flash'
+const DEFAULT_LLM_MODEL = LLM_MODELS.defaultModelId || 'gemini-3-flash-preview'
 
 // ============================================================
 // Default Options

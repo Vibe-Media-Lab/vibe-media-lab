@@ -11,18 +11,18 @@ describe('InterpretRequestSchema model 필드', () => {
     options: { tone: 'warm', length: 'medium' },
   }
 
-  it('허용된 모델 통과 (gemini-2.5-flash)', () => {
+  it('허용된 모델 통과 (gemini-3-flash-preview)', () => {
     const result = InterpretRequestSchema.safeParse({
       ...validBase,
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
     })
     expect(result.success).toBe(true)
   })
 
-  it('허용된 모델 통과 (gemini-2.5-pro)', () => {
+  it('허용된 모델 통과 (gemini-3.1-pro-preview)', () => {
     const result = InterpretRequestSchema.safeParse({
       ...validBase,
-      model: 'gemini-2.5-pro',
+      model: 'gemini-3.1-pro-preview',
     })
     expect(result.success).toBe(true)
   })
