@@ -28,6 +28,31 @@ vi.mock('@sentry/nextjs', () => ({
   captureException: vi.fn(),
 }))
 
+// Mock router — gemini provider always available when GEMINI_API_KEY is set
+vi.mock('@/lib/models/router', () => ({
+  routeModel: vi.fn((modelId: string) => ({
+    modelId,
+    provider: 'gemini' as const,
+    fallbackUsed: false,
+  })),
+  getManualFallback: vi.fn(() => null),
+  resolveProvider: vi.fn(() => 'gemini' as const),
+  isProviderAvailable: vi.fn(() => true),
+}))
+
+// Mock model-options
+vi.mock('@/lib/constants/model-options', () => ({
+  LLM_MODELS: {
+    category: 'llm',
+    options: [
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    ],
+    defaultModelId: 'gemini-2.5-flash',
+  },
+  ALLOWED_LLM_MODELS: ['gemini-2.5-flash', 'gemini-2.5-pro'] as const,
+}))
+
 // Mock supabase admin client
 const mockSupabaseInsert = vi.fn()
 const mockSupabaseSelect = vi.fn()
@@ -353,6 +378,61 @@ describe('myeongpan-service', () => {
 
       const body = JSON.parse(mockFetchWithTimeout.mock.calls[0]![1].body)
       expect(body.systemInstruction.parts[0].text).toContain('영어로 작성')
+    })
+  })
+
+  describe('LLM 모델 선택', () => {
+    it('기본 모델(gemini-2.5-flash) URL + meta.model 반영', async () => {
+      mockFetchWithTimeout.mockResolvedValue(createGeminiResponse(VALID_LLM_RESPONSE))
+
+      const { interpretChart } = await import('../myeongpan-service')
+
+      const result = await interpretChart(MOCK_CHART)
+
+      // URL에 기본 모델 포함
+      const callUrl = mockFetchWithTimeout.mock.calls[0]![0] as string
+      expect(callUrl).toContain('gemini-2.5-flash')
+      // meta.model 반영
+      expect(result.meta.model).toBe('gemini-2.5-flash')
+    })
+
+    it('지정 모델(gemini-2.5-pro) URL + meta.model 반영', async () => {
+      const { routeModel } = await import('@/lib/models/router')
+      vi.mocked(routeModel).mockReturnValue({
+        modelId: 'gemini-2.5-pro',
+        provider: 'gemini',
+        fallbackUsed: false,
+      })
+
+      mockFetchWithTimeout.mockResolvedValue(createGeminiResponse(VALID_LLM_RESPONSE))
+
+      const { interpretChart } = await import('../myeongpan-service')
+
+      const result = await interpretChart(MOCK_CHART, undefined, 'gemini-2.5-pro')
+
+      const callUrl = mockFetchWithTimeout.mock.calls[0]![0] as string
+      expect(callUrl).toContain('gemini-2.5-pro')
+      expect(result.meta.model).toBe('gemini-2.5-pro')
+    })
+
+    it('Mock 모드에서 meta.model은 항상 mock', async () => {
+      process.env.GEMINI_API_KEY = ''
+
+      const { interpretChart } = await import('../myeongpan-service')
+
+      const result = await interpretChart(MOCK_CHART, undefined, 'gemini-2.5-pro')
+
+      expect(result.meta.model).toBe('mock')
+      expect(mockFetchWithTimeout).not.toHaveBeenCalled()
+    })
+
+    it('모든 provider 불가 시 에러', async () => {
+      const { routeModel } = await import('@/lib/models/router')
+      vi.mocked(routeModel).mockReturnValue(null)
+
+      const { interpretChart } = await import('../myeongpan-service')
+
+      await expect(interpretChart(MOCK_CHART)).rejects.toThrow('사용 가능한 LLM 서비스가 없습니다')
     })
   })
 })

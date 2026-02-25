@@ -8,6 +8,11 @@ import type {
 } from '@vibe-media-lab/myeongpan-core'
 import { guessDefaultCity, type CityEntry } from '@/lib/constants/city-data'
 import type { SavedChartSummary } from '@/lib/services/myeongpan-service'
+import { ALLOWED_LLM_MODELS, LLM_MODELS } from '@/lib/constants/model-options'
+
+// 강타입 (localStorage 오염 방지)
+type LlmModelId = (typeof ALLOWED_LLM_MODELS)[number]
+const DEFAULT_LLM_MODEL: LlmModelId = (LLM_MODELS.defaultModelId || 'gemini-2.5-flash') as LlmModelId
 
 // ============================================================
 // Types
@@ -44,6 +49,7 @@ interface MyeongpanState {
   length: 'short' | 'medium' | 'long'
   topics: InterpretationTopic[]
   houseSystem: 'placidus' | 'koch' | 'equal' | 'whole-sign'
+  llmModel: LlmModelId
 
   // Results (NOT persisted)
   chartId: string | null
@@ -71,6 +77,7 @@ interface MyeongpanActions {
   setLength: (v: 'short' | 'medium' | 'long') => void
   setTopics: (v: InterpretationTopic[]) => void
   setHouseSystem: (v: 'placidus' | 'koch' | 'equal' | 'whole-sign') => void
+  setLlmModel: (v: LlmModelId) => void
 
   // Actions
   submit: () => Promise<void>
@@ -178,6 +185,7 @@ function createDefaultState(): MyeongpanState {
     length: 'medium',
     topics: [],
     houseSystem: 'placidus',
+    llmModel: DEFAULT_LLM_MODEL,
 
     chartId: null,
     chart: null,
@@ -219,6 +227,7 @@ export const useMyeongpanStore = create<MyeongpanState & MyeongpanActions>()(
       setLength: (v) => set({ length: v }),
       setTopics: (v) => set({ topics: v }),
       setHouseSystem: (v) => set({ houseSystem: v }),
+      setLlmModel: (v) => set({ llmModel: v }),
 
       // --- Submit ---
       submit: async () => {
@@ -249,7 +258,7 @@ export const useMyeongpanStore = create<MyeongpanState & MyeongpanActions>()(
             }
             const interpretation = await apiPost<InterpretationResult>(
               '/api/myeongpan/interpret',
-              { chartId: calcResult.chartId, options }
+              { chartId: calcResult.chartId, model: state.llmModel, options }
             )
             set({ interpretation, phase: 'result', loadingStep: null })
           } catch (_interpError) {
@@ -281,7 +290,7 @@ export const useMyeongpanStore = create<MyeongpanState & MyeongpanActions>()(
           }
           const interpretation = await apiPost<InterpretationResult>(
             '/api/myeongpan/interpret',
-            { chartId: state.chartId, options }
+            { chartId: state.chartId, model: state.llmModel, options }
           )
           set({ interpretation, loadingStep: null })
           toast.success('풀이가 갱신되었습니다.')
@@ -341,13 +350,14 @@ export const useMyeongpanStore = create<MyeongpanState & MyeongpanActions>()(
 
       // --- Reset ---
       reset: () => {
-        const { tone, length, topics, houseSystem } = get()
+        const { tone, length, topics, houseSystem, llmModel } = get()
         set({
           ...createDefaultState(),
           tone,
           length,
           topics,
           houseSystem,
+          llmModel,
         })
       },
     }),
@@ -358,7 +368,16 @@ export const useMyeongpanStore = create<MyeongpanState & MyeongpanActions>()(
         length: state.length,
         topics: state.topics,
         houseSystem: state.houseSystem,
+        llmModel: state.llmModel,
       }),
+      merge: (persisted, current) => {
+        const p = persisted as Partial<MyeongpanState>
+        // localStorage 오염 방지: allowlist에 없는 llmModel은 default로 교정
+        const llmModel = (ALLOWED_LLM_MODELS as readonly string[]).includes(p.llmModel ?? '')
+          ? (p.llmModel as LlmModelId)
+          : DEFAULT_LLM_MODEL
+        return { ...current, ...p, llmModel }
+      },
     }
   )
 )

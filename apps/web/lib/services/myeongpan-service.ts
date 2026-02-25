@@ -26,13 +26,14 @@ import { getLogger } from '@/lib/logger'
 import { fetchWithTimeout } from '@/lib/utils/fetch-with-timeout'
 import { retryWithBackoff } from '@/lib/utils/retry-with-backoff'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { routeModel, getManualFallback, resolveProvider, isProviderAvailable } from '@/lib/models/router'
+import { LLM_MODELS } from '@/lib/constants/model-options'
 
 const logger = getLogger('myeongpan-service')
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const IS_MOCK = !GEMINI_API_KEY
-const GEMINI_MODEL = 'gemini-2.5-flash'
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+const DEFAULT_LLM_MODEL = LLM_MODELS.defaultModelId || 'gemini-2.5-flash'
 
 // ============================================================
 // Default Options
@@ -204,14 +205,21 @@ function buildUserPrompt(
 /**
  * Gemini API 호출
  */
-async function callGemini(systemPrompt: string, userPrompt: string, maxOutputTokens: number): Promise<string> {
+async function callGemini(
+  systemPrompt: string,
+  userPrompt: string,
+  maxOutputTokens: number,
+  modelId: string = DEFAULT_LLM_MODEL,
+): Promise<string> {
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not configured')
   }
 
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`
+
   return retryWithBackoff(
     async () => {
-      const response = await fetchWithTimeout(GEMINI_API_URL, {
+      const response = await fetchWithTimeout(apiUrl, {
         method: 'POST',
         timeoutMs: 90000,
         headers: {
@@ -398,7 +406,8 @@ function createMockInterpretation(
  */
 export async function interpretChart(
   chart: UnifiedChart,
-  options?: Partial<InterpretationOptions>
+  options?: Partial<InterpretationOptions>,
+  model?: string,
 ): Promise<InterpretationResult> {
   const opts = mergeOptions(options)
   const systemsUsed = chart.meta.systemsCompleted
@@ -409,33 +418,33 @@ export async function interpretChart(
     return createMockInterpretation(chart, opts)
   }
 
+  const requestedModel = model ?? DEFAULT_LLM_MODEL
   const startTime = Date.now()
 
+  // routeModel — provider 가용성 + fallback chain
+  const route = routeModel(requestedModel, 'llm')
+  if (!route) {
+    throw new Error('사용 가능한 LLM 서비스가 없습니다.')
+  }
+
+  // 프롬프트 사전 계산 (primary/fallback 공유)
+  const chartText = formatChartForLLM(chart)
+  const inputTokenEstimate = estimateTokenCount(chartText)
+  const systemPrompt = buildSystemPrompt(opts, systemsUsed)
+  const userPrompt = buildUserPrompt(chartText, opts)
+  const maxOutputTokens = getMaxOutputTokens(opts.length)
+
   try {
-    // 1. 차트 포맷
-    const chartText = formatChartForLLM(chart)
-    const inputTokenEstimate = estimateTokenCount(chartText)
-
-    // 2. 프롬프트 구성
-    const systemPrompt = buildSystemPrompt(opts, systemsUsed)
-    const userPrompt = buildUserPrompt(chartText, opts)
-    const maxOutputTokens = getMaxOutputTokens(opts.length)
-
-    // 3. Gemini 호출
-    const rawText = await callGemini(systemPrompt, userPrompt, maxOutputTokens)
-
-    // 4. 파싱 + 검증
+    const rawText = await callGemini(systemPrompt, userPrompt, maxOutputTokens, route.modelId)
     const rawJson = extractJSON<unknown>(rawText)
     const validated = validateInterpretation(rawJson)
-
-    const latencyMs = Date.now() - startTime
 
     const result: InterpretationResult = {
       ...validated,
       systemsUsed,
       meta: {
-        model: GEMINI_MODEL,
-        latencyMs,
+        model: route.modelId,
+        latencyMs: Date.now() - startTime,
         inputTokenEstimate,
         options: opts,
         chartConfigHash: chart.meta.configHash,
@@ -443,17 +452,52 @@ export async function interpretChart(
     }
 
     logger.info('Interpretation completed', {
-      latencyMs,
+      model: route.modelId,
+      fallbackUsed: route.fallbackUsed,
+      latencyMs: result.meta.latencyMs,
       systemsUsed,
       sectionsCount: result.sections.length,
     })
 
     return result
   } catch (error) {
+    // 1차 실패 → getManualFallback 1회 재시도 (retry 없이)
+    const fallbackId = getManualFallback(route.modelId, 'llm')
+    if (fallbackId) {
+      const fbProvider = resolveProvider(fallbackId)
+      if (isProviderAvailable(fbProvider)) {
+        logger.info('LLM falling back', { from: route.modelId, to: fallbackId })
+        try {
+          const rawText = await callGemini(systemPrompt, userPrompt, maxOutputTokens, fallbackId)
+          const rawJson = extractJSON<unknown>(rawText)
+          const validated = validateInterpretation(rawJson)
+
+          return {
+            ...validated,
+            systemsUsed,
+            meta: {
+              model: fallbackId,
+              latencyMs: Date.now() - startTime,
+              inputTokenEstimate,
+              options: opts,
+              chartConfigHash: chart.meta.configHash,
+            },
+          }
+        } catch (fbError) {
+          logger.error('LLM fallback also failed', {
+            fallbackId,
+            error: fbError instanceof Error ? fbError.message : String(fbError),
+          })
+        }
+      }
+    }
+
     const latencyMs = Date.now() - startTime
 
     Sentry.withScope((scope) => {
       scope.setTag('service', 'myeongpan-interpretation')
+      scope.setExtra('requestedModel', requestedModel)
+      scope.setExtra('routedModel', route.modelId)
       scope.setExtra('latencyMs', latencyMs)
       scope.setExtra('systemsUsed', systemsUsed)
       Sentry.captureException(error)

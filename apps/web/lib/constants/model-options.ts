@@ -23,3 +23,7 @@ export const ALLOWED_VIDEO_MODELS = getAllowedIds('image-to-video')
 export const ALLOWED_TEXT_TO_VIDEO_MODELS = getAllowedIds('text-to-video')
 export const ALLOWED_TTS_MODELS = getAllowedIds('tts')
 export const ALLOWED_BGM_MODELS = getAllowedIds('bgm')
+
+// ─── LLM ───
+export const LLM_MODELS = getModelSelectionConfig('llm')
+export const ALLOWED_LLM_MODELS = getAllowedIds('llm')

@@ -16,6 +16,7 @@ export default defineConfig({
       'lib/step-actions/__tests__/**/*.test.ts',
       'lib/models/__tests__/**/*.test.ts',
       'lib/services/__tests__/**/*.test.ts',
+      'lib/api/**/__tests__/**/*.test.ts',
     ],
     coverage: {
       provider: 'v8',

@@ -7,6 +7,7 @@ export type ModelCapability =
   | 'tts'
   | 'bgm'
   | 'composition'
+  | 'llm'
 
 // ─── Provider ───
 export type ModelProvider = 'fal' | 'kieai' | 'gemini'

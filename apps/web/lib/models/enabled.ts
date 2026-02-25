@@ -162,4 +162,12 @@ export const ENABLED: Record<ModelCapability, EnabledConfig> = {
   },
 
   'composition': { models: [], featured: [], defaultId: '', recommendedId: '', fallbacks: {} },
+
+  'llm': {
+    models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+    featured: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+    defaultId: 'gemini-2.5-flash',
+    recommendedId: 'gemini-2.5-flash',
+    fallbacks: { 'gemini-2.5-pro': 'gemini-2.5-flash' },
+  },
 }

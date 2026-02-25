@@ -60,7 +60,7 @@ export const POST = createApiHandler<InterpretResponse>(
     if (validated.options?.topics) options.topics = validated.options.topics
 
     // LLM 해석
-    const interpretation = await interpretChart(chart, options)
+    const interpretation = await interpretChart(chart, options, validated.model)
 
     // 결과 저장
     await saveInterpretation(chartId, context.user.id, interpretation, mergeOptions(options))

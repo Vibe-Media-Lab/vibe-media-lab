@@ -7,6 +7,7 @@
 
 import { z } from 'zod'
 import type { UnifiedChart, InterpretationResult } from '@vibe-media-lab/myeongpan-core'
+import { ALLOWED_LLM_MODELS } from '@/lib/constants/model-options'
 
 // ============================================================
 // BirthProfile 스키마 (API용 minimal)
@@ -58,6 +59,7 @@ export const InterpretRequestSchema = z
   .object({
     chartId: z.string().uuid().optional(),
     birthProfile: BirthProfileRequestSchema.optional(),
+    model: z.enum(ALLOWED_LLM_MODELS).optional(),
     options: z
       .object({
         tone: z.enum(['warm', 'neutral', 'professional']).default('warm'),

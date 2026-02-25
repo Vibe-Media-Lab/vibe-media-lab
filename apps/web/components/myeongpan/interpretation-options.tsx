@@ -1,7 +1,12 @@
 'use client'
 
 import { useMyeongpanStore } from '@/lib/stores/myeongpan-store'
+import { LLM_MODELS, ALLOWED_LLM_MODELS } from '@/lib/constants/model-options'
 import type { InterpretationTopic } from '@vibe-media-lab/myeongpan-core'
+
+type LlmModelId = (typeof ALLOWED_LLM_MODELS)[number]
+
+const LLM_OPTIONS = LLM_MODELS.options
 
 const TONE_OPTIONS = [
   { value: 'warm' as const, label: '따뜻한' },
@@ -25,7 +30,7 @@ const TOPIC_OPTIONS: { value: InterpretationTopic; label: string }[] = [
 ]
 
 export function InterpretationOptions() {
-  const { tone, length, topics, setTone, setLength, setTopics } = useMyeongpanStore()
+  const { tone, length, topics, llmModel, setTone, setLength, setTopics, setLlmModel } = useMyeongpanStore()
 
   const toggleTopic = (topic: InterpretationTopic) => {
     if (topics.includes(topic)) {
@@ -37,6 +42,32 @@ export function InterpretationOptions() {
 
   return (
     <div className="space-y-4">
+      <div>
+        <label className="mb-2 block text-xs text-white/50">분석 모델</label>
+        <div className="flex gap-2">
+          {LLM_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setLlmModel(opt.id as LlmModelId)}
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                llmModel === opt.id
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/50 hover:text-white/70'
+              }`}
+            >
+              {opt.label}
+              {opt.meta?.badge && (
+                <span className="ml-1 text-[10px] text-[var(--color-neon-lime)]">{opt.meta.badge}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1 text-[10px] text-white/30">
+          {LLM_OPTIONS.find((o) => o.id === llmModel)?.description}
+        </p>
+      </div>
+
       <div>
         <label className="mb-2 block text-xs text-white/50">풀이 어조</label>
         <div className="flex gap-2">

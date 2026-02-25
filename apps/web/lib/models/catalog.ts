@@ -502,4 +502,22 @@ export const MODEL_CATALOG: CatalogModel[] = [
     description: '가장 빠름',
     meta: { quality: 'standard', speed: 'fast', cost: 'low' },
   },
+
+  // ─── LLM ───
+  {
+    id: 'gemini-2.5-flash',
+    label: 'Gemini 2.5 Flash',
+    provider: 'gemini',
+    capabilities: ['llm'],
+    description: '빠른 명판 풀이',
+    meta: { quality: 'standard', speed: 'fast', cost: 'low', badge: '추천', priceNote: '~$0.15/1K토큰' },
+  },
+  {
+    id: 'gemini-2.5-pro',
+    label: 'Gemini 2.5 Pro',
+    provider: 'gemini',
+    capabilities: ['llm'],
+    description: '심층 명판 풀이',
+    meta: { quality: 'high', speed: 'standard', cost: 'medium', priceNote: '~$1.25/1K토큰' },
+  },
 ]
