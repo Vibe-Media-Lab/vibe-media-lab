@@ -29,6 +29,7 @@
     "@supabase/supabase-js": "^2.45.4",
     "@vibe-media-lab/db": "workspace:*",
     "@vibe-media-lab/media-router": "workspace:*",
+    "@vibe-media-lab/myeongpan-core": "workspace:*",
     "@vibe-media-lab/shared": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
