@@ -1,7 +1,7 @@
 /**
  * 통합 차트 포매터
  *
- * UnifiedChart → LLM 입력 텍스트 (~900-1200 토큰)
+ * UnifiedChart → LLM 입력 텍스트 (~2000-3000 토큰)
  * 사용 가능한 체계만 포함, unknownTime 자동 처리
  */
 

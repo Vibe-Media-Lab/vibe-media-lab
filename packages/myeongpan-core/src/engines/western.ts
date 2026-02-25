@@ -1,5 +1,5 @@
 import { calculateChart } from 'celestine'
-import type { WesternChart, WesternPlanet, WesternHouseCusp, WesternAspect, WesternAngle } from '../types.js'
+import type { WesternChart, WesternPlanet, WesternHouseCusp, WesternAspect, WesternAngle, WesternNode } from '../types.js'
 import type { WesternInput } from '../input/normalize.js'
 
 /**
@@ -82,6 +82,18 @@ export function computeWestern(input: WesternInput): WesternChart {
     imumCoeli: mapAngle(chart.angles.imumCoeli),
   }
 
+  // 교점(Nodes) 매핑
+  const nodes: WesternNode[] = (chart.nodes ?? []).map((n: { name: string; type: string; longitude: number; signName: string; degree: number; minute: number; formatted: string; house: number }) => ({
+    name: n.name,
+    type: n.type,
+    longitude: n.longitude,
+    sign: n.signName,
+    degree: n.degree,
+    minute: n.minute,
+    formatted: n.formatted,
+    house: n.house,
+  }))
+
   // 서머리에서 추가 정보 추출
   const summary = chart.summary
   const elements: Record<string, string[]> = {
@@ -109,6 +121,7 @@ export function computeWestern(input: WesternInput): WesternChart {
     },
     aspects,
     angles,
+    nodes,
     sunSign: sunPlanet?.sign ?? 'Unknown',
     moonSign: moonPlanet?.sign ?? 'Unknown',
     risingSign: angles.ascendant.sign,

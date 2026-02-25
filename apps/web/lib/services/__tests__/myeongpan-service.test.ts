@@ -45,12 +45,13 @@ vi.mock('@/lib/constants/model-options', () => ({
   LLM_MODELS: {
     category: 'llm',
     options: [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+      { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+      { id: 'gemini-3-pro-preview', label: 'Gemini 3 Pro' },
+      { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
     ],
-    defaultModelId: 'gemini-2.5-flash',
+    defaultModelId: 'gemini-3-flash-preview',
   },
-  ALLOWED_LLM_MODELS: ['gemini-2.5-flash', 'gemini-2.5-pro'] as const,
+  ALLOWED_LLM_MODELS: ['gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-3.1-pro-preview'] as const,
 }))
 
 // Mock supabase admin client
@@ -123,6 +124,7 @@ const MOCK_CHART: UnifiedChart = {
       descendant: { name: 'Descendant', abbrev: 'DSC', longitude: 0, sign: 'Aries', degree: 0, minute: 0, second: 0, formatted: '0° Aries' },
       imumCoeli: { name: 'Imum Coeli', abbrev: 'IC', longitude: 270, sign: 'Capricorn', degree: 0, minute: 0, second: 0, formatted: '0° Capricorn' },
     },
+    nodes: [],
     sunSign: 'Scorpio',
     moonSign: 'Aquarius',
     risingSign: 'Libra',
@@ -219,7 +221,7 @@ describe('myeongpan-service', () => {
       expect(result.keywords.length).toBeGreaterThan(0)
       expect(result.sections.length).toBeGreaterThan(0)
       expect(result.systemsUsed).toEqual(['saju', 'ziwei', 'western'])
-      expect(result.meta.model).toBe('gemini-2.5-flash')
+      expect(result.meta.model).toBe('gemini-3-flash-preview')
       expect(result.meta.latencyMs).toBeGreaterThanOrEqual(0)
     })
 
@@ -382,7 +384,7 @@ describe('myeongpan-service', () => {
   })
 
   describe('LLM 모델 선택', () => {
-    it('기본 모델(gemini-2.5-flash) URL + meta.model 반영', async () => {
+    it('기본 모델(gemini-3-flash-preview) URL + meta.model 반영', async () => {
       mockFetchWithTimeout.mockResolvedValue(createGeminiResponse(VALID_LLM_RESPONSE))
 
       const { interpretChart } = await import('../myeongpan-service')
@@ -391,15 +393,15 @@ describe('myeongpan-service', () => {
 
       // URL에 기본 모델 포함
       const callUrl = mockFetchWithTimeout.mock.calls[0]![0] as string
-      expect(callUrl).toContain('gemini-2.5-flash')
+      expect(callUrl).toContain('gemini-3-flash-preview')
       // meta.model 반영
-      expect(result.meta.model).toBe('gemini-2.5-flash')
+      expect(result.meta.model).toBe('gemini-3-flash-preview')
     })
 
-    it('지정 모델(gemini-2.5-pro) URL + meta.model 반영', async () => {
+    it('지정 모델(gemini-3.1-pro-preview) URL + meta.model 반영', async () => {
       const { routeModel } = await import('@/lib/models/router')
       vi.mocked(routeModel).mockReturnValue({
-        modelId: 'gemini-2.5-pro',
+        modelId: 'gemini-3.1-pro-preview',
         provider: 'gemini',
         fallbackUsed: false,
       })
@@ -408,11 +410,11 @@ describe('myeongpan-service', () => {
 
       const { interpretChart } = await import('../myeongpan-service')
 
-      const result = await interpretChart(MOCK_CHART, undefined, 'gemini-2.5-pro')
+      const result = await interpretChart(MOCK_CHART, undefined, 'gemini-3.1-pro-preview')
 
       const callUrl = mockFetchWithTimeout.mock.calls[0]![0] as string
-      expect(callUrl).toContain('gemini-2.5-pro')
-      expect(result.meta.model).toBe('gemini-2.5-pro')
+      expect(callUrl).toContain('gemini-3.1-pro-preview')
+      expect(result.meta.model).toBe('gemini-3.1-pro-preview')
     })
 
     it('Mock 모드에서 meta.model은 항상 mock', async () => {
@@ -420,7 +422,7 @@ describe('myeongpan-service', () => {
 
       const { interpretChart } = await import('../myeongpan-service')
 
-      const result = await interpretChart(MOCK_CHART, undefined, 'gemini-2.5-pro')
+      const result = await interpretChart(MOCK_CHART, undefined, 'gemini-3.1-pro-preview')
 
       expect(result.meta.model).toBe('mock')
       expect(mockFetchWithTimeout).not.toHaveBeenCalled()

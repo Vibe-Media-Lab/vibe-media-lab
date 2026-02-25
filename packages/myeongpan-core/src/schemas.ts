@@ -83,6 +83,10 @@ const SajuPillarSchema = z.object({
   branchElement: z.enum(['목', '화', '토', '금', '수']),
   stemYinYang: z.enum(['양', '음']),
   branchYinYang: z.enum(['양', '음']),
+  stemSipsin: z.string().optional(),
+  branchSipsin: z.string().optional(),
+  unseong: z.string().optional(),
+  janggan: z.array(z.string()).optional(),
 })
 
 const FiveElementCountSchema = z.object({
@@ -128,10 +132,11 @@ const ZiweiPalaceSchema = z.object({
       type: z.string(),
       brightness: z.string(),
       mutagen: z.string(),
+      starType: z.string().optional(),
     }),
   ),
-  minorStars: z.array(z.object({ name: z.string(), type: z.string(), brightness: z.string(), mutagen: z.string() })),
-  adjectiveStars: z.array(z.object({ name: z.string(), type: z.string(), brightness: z.string(), mutagen: z.string() })),
+  minorStars: z.array(z.object({ name: z.string(), type: z.string(), brightness: z.string(), mutagen: z.string(), starType: z.string().optional() })),
+  adjectiveStars: z.array(z.object({ name: z.string(), type: z.string(), brightness: z.string(), mutagen: z.string(), starType: z.string().optional() })),
   changsheng12: z.string(),
   decadal: z
     .object({
@@ -205,6 +210,16 @@ const WesternChartSchema = z.object({
     descendant: z.object({ name: z.string(), longitude: z.number(), sign: z.string(), formatted: z.string() }).passthrough(),
     imumCoeli: z.object({ name: z.string(), longitude: z.number(), sign: z.string(), formatted: z.string() }).passthrough(),
   }),
+  nodes: z.array(z.object({
+    name: z.string(),
+    type: z.string(),
+    longitude: z.number(),
+    sign: z.string(),
+    degree: z.number(),
+    minute: z.number(),
+    formatted: z.string(),
+    house: z.number(),
+  })),
   sunSign: z.string(),
   moonSign: z.string(),
   risingSign: z.string(),

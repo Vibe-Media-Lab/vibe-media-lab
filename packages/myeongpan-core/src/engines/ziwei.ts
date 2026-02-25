@@ -6,7 +6,7 @@ import type { ZiweiInput } from '../input/normalize.js'
  * iztro star → ZiweiStar 변환
  */
 function mapStar(
-  raw: { name: string; brightness?: string; mutagen?: string },
+  raw: { name: string; brightness?: string; mutagen?: string; type?: string },
   type: 'major' | 'minor' | 'adjective',
 ): ZiweiStar {
   return {
@@ -14,6 +14,7 @@ function mapStar(
     type,
     brightness: String(raw.brightness ?? ''),
     mutagen: String(raw.mutagen ?? ''),
+    starType: raw.type as ZiweiStar['starType'],
   }
 }
 

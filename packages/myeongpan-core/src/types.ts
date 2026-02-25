@@ -65,6 +65,14 @@ export interface SajuPillar {
   stemYinYang: YinYang
   /** 지지 음양 */
   branchYinYang: YinYang
+  /** 천간 십신 (일간 기준) */
+  stemSipsin?: string
+  /** 지지 십신 (지장간 본기 기준) */
+  branchSipsin?: string
+  /** 12운성 (일간 기준) */
+  unseong?: string
+  /** 지장간 */
+  janggan?: string[]
 }
 
 export type FiveElement = '목' | '화' | '토' | '금' | '수'
@@ -115,6 +123,8 @@ export interface ZiweiStar {
   type: 'major' | 'minor' | 'adjective'
   brightness: string
   mutagen: string
+  /** iztro 원본 분류 (soft=길성, tough=살성 등) */
+  starType?: 'major' | 'soft' | 'tough' | 'adjective' | 'flower' | 'helper' | 'lucun' | 'tianma'
 }
 
 export interface ZiweiPalace {
@@ -206,6 +216,17 @@ export interface WesternAngle {
   formatted: string
 }
 
+export interface WesternNode {
+  name: string
+  type: string
+  longitude: number
+  sign: string
+  degree: number
+  minute: number
+  formatted: string
+  house: number
+}
+
 export interface WesternChart {
   planets: WesternPlanet[]
   houses: {
@@ -219,6 +240,7 @@ export interface WesternChart {
     descendant: WesternAngle
     imumCoeli: WesternAngle
   }
+  nodes: WesternNode[]
   /** 태양 별자리 */
   sunSign: string
   /** 달 별자리 */

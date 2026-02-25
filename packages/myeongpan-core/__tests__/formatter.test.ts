@@ -83,6 +83,30 @@ describe('formatSaju', () => {
     // 한자가 포함되어야 함
     expect(text).toMatch(/\(.[^\)]+\)/)
   })
+
+  // 십신/운성/장간 (Phase B)
+  it('십신 라벨 포함', () => {
+    const text = formatSaju(chart1.saju!, false)
+    // 일간은 "본원"
+    expect(text).toContain('본원')
+    // 다른 주에 십신 표기
+    expect(text).toMatch(/비견|겁재|식신|상관|편재|정재|편관|정관|편인|정인/)
+  })
+
+  it('12운성 라벨 포함', () => {
+    const text = formatSaju(chart1.saju!, false)
+    expect(text).toMatch(/운성:(장생|목욕|관대|건록|제왕|쇠|병|사|묘|절|태|양)/)
+  })
+
+  it('지장간 포함', () => {
+    const text = formatSaju(chart1.saju!, false)
+    expect(text).toContain('장간:')
+  })
+
+  it('unknownTime 시 시주 십신/운성 없음', () => {
+    const text = formatSaju(chart2.saju!, true)
+    expect(text).toContain('시주(時柱): (미상)')
+  })
 })
 
 // ============================================================
@@ -97,11 +121,37 @@ describe('formatZiwei', () => {
     expect(text).toContain('오행국:')
   })
 
-  it('핵심 궁위 포함', () => {
+  it('12궁 배치 포함', () => {
     const text = formatZiwei(chart1.ziwei!)
-    expect(text).toContain('핵심 궁위')
+    expect(text).toContain('12궁 배치')
     // 최소 1개 궁위는 출력되어야 함
     expect(text).toContain('주성:')
+  })
+
+  it('12궁 전체 포함', () => {
+    const text = formatZiwei(chart1.ziwei!)
+    expect(text).toContain('명궁(命宮)')
+    expect(text).toContain('형제궁(兄弟宮)')
+    expect(text).toContain('자녀궁(子女宮)')
+    expect(text).toContain('전택궁(田宅宮)')
+    expect(text).toContain('복덕궁(福德宮)')
+    expect(text).toContain('부모궁(父母宮)')
+  })
+
+  it('사화 요약 포함', () => {
+    const text = formatZiwei(chart1.ziwei!)
+    expect(text).toContain('사화')
+  })
+
+  it('대한 포함', () => {
+    const text = formatZiwei(chart1.ziwei!)
+    expect(text).toContain('대한')
+  })
+
+  it('길성/살성 분류 포함', () => {
+    const text = formatZiwei(chart1.ziwei!)
+    expect(text).toContain('길성:')
+    expect(text).toContain('살성:')
   })
 
   it('DST 케이스도 정상 포맷', () => {
@@ -123,19 +173,42 @@ describe('formatWestern', () => {
     expect(text).toContain('상승:')
   })
 
-  it('행성 배치 포함 (최소 5개)', () => {
+  it('행성 배치 포함 (최소 10개 — 외행성 포함)', () => {
     const text = formatWestern(chart1.western!)
     expect(text).toContain('행성 배치')
-    // Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn
-    const planetMatches = text.match(/태양|달\(Moon\)|수성|금성|화성|목성|토성/g)
-    expect(planetMatches?.length).toBeGreaterThanOrEqual(5)
+    const planetMatches = text.match(/태양|달\(Moon\)|수성|금성|화성|목성|토성|천왕성|해왕성|명왕성/g)
+    expect(planetMatches?.length).toBeGreaterThanOrEqual(10)
   })
 
-  it('애스펙트 최대 8개', () => {
+  it('외행성 포함 (Uranus, Neptune, Pluto)', () => {
+    const text = formatWestern(chart1.western!)
+    expect(text).toContain('천왕성')
+    expect(text).toContain('해왕성')
+    expect(text).toContain('명왕성')
+  })
+
+  it('앵글 포함 (ASC, MC)', () => {
+    const text = formatWestern(chart1.western!)
+    expect(text).toContain('앵글')
+    expect(text).toContain('ASC')
+    expect(text).toContain('MC')
+  })
+
+  it('하우스 커스프 포함', () => {
+    const text = formatWestern(chart1.western!)
+    expect(text).toContain('하우스 커스프')
+  })
+
+  it('교점 포함', () => {
+    const text = formatWestern(chart1.western!)
+    expect(text).toContain('교점')
+  })
+
+  it('애스펙트 최대 15개', () => {
     const text = formatWestern(chart1.western!)
     if (text.includes('주요 애스펙트')) {
       const aspectLines = text.split('\n').filter((l) => l.includes('orb'))
-      expect(aspectLines.length).toBeLessThanOrEqual(8)
+      expect(aspectLines.length).toBeLessThanOrEqual(15)
     }
   })
 
@@ -178,9 +251,9 @@ describe('formatChartForLLM', () => {
     expect(text).toContain('서양 점성술 분석')
   })
 
-  it('토큰 예산 검증 (2000자 미만)', () => {
+  it('토큰 예산 검증 (8000자 미만)', () => {
     const text = formatChartForLLM(chart1)
-    expect(text.length).toBeLessThan(4000) // 4000자 이하 (안전 마진)
+    expect(text.length).toBeLessThan(8000)
   })
 
   it('자시 경계 케이스도 정상 포맷', () => {

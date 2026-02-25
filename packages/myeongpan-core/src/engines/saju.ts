@@ -1,38 +1,8 @@
 import { calculateSaju, solarToLunar } from '@fullstackfamily/manseryeok'
-import type { SajuChart, SajuPillar, FiveElement, YinYang, FiveElementCount, YinYangBalance } from '../types.js'
+import type { SajuChart, SajuPillar, FiveElementCount, YinYangBalance } from '../types.js'
 import type { SajuInput } from '../input/normalize.js'
-
-// ============================================================
-// 천간/지지 → 오행/음양 매핑 테이블
-// ============================================================
-
-const STEMS: Record<string, { element: FiveElement; yinYang: YinYang }> = {
-  '갑': { element: '목', yinYang: '양' },
-  '을': { element: '목', yinYang: '음' },
-  '병': { element: '화', yinYang: '양' },
-  '정': { element: '화', yinYang: '음' },
-  '무': { element: '토', yinYang: '양' },
-  '기': { element: '토', yinYang: '음' },
-  '경': { element: '금', yinYang: '양' },
-  '신': { element: '금', yinYang: '음' },
-  '임': { element: '수', yinYang: '양' },
-  '계': { element: '수', yinYang: '음' },
-}
-
-const BRANCHES: Record<string, { element: FiveElement; yinYang: YinYang }> = {
-  '자': { element: '수', yinYang: '양' },
-  '축': { element: '토', yinYang: '음' },
-  '인': { element: '목', yinYang: '양' },
-  '묘': { element: '목', yinYang: '음' },
-  '진': { element: '토', yinYang: '양' },
-  '사': { element: '화', yinYang: '음' },
-  '오': { element: '화', yinYang: '양' },
-  '미': { element: '토', yinYang: '음' },
-  '신': { element: '금', yinYang: '양' },
-  '유': { element: '금', yinYang: '음' },
-  '술': { element: '토', yinYang: '양' },
-  '해': { element: '수', yinYang: '음' },
-}
+import { STEMS, BRANCHES } from './saju-constants.js'
+import { getSipsin, getMainJanggan, JANGGAN, UNSEONG } from './saju-tables.js'
 
 /**
  * 기둥 한글 문자열 → SajuPillar 파싱
@@ -112,6 +82,19 @@ export function computeSaju(input: SajuInput): SajuChart {
   // 활성 기둥 목록
   const activePillars = [yearPillar, monthPillar, dayPillar]
   if (hourPillar) activePillars.push(hourPillar)
+
+  // 십신/운성/장간 enrichment
+  const dayStem = dayPillar.stem
+  for (const pillar of activePillars) {
+    if (pillar === dayPillar) {
+      pillar.stemSipsin = '본원'
+    } else {
+      pillar.stemSipsin = getSipsin(dayStem, pillar.stem)
+    }
+    pillar.branchSipsin = getSipsin(dayStem, getMainJanggan(pillar.branch))
+    pillar.unseong = UNSEONG[dayStem]?.[pillar.branch]
+    pillar.janggan = JANGGAN[pillar.branch]
+  }
 
   // 오행/음양 계산
   const fiveElements = countFiveElements(activePillars)

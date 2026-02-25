@@ -1,15 +1,40 @@
 /**
  * 사주(四柱) 포매터
  *
- * SajuChart → LLM 입력 텍스트 (~200 토큰)
- * 4주 테이블 + 오행 분포 + 음양 균형 + 일간 분석
+ * SajuChart → LLM 입력 텍스트 (~450 토큰)
+ * 4주 테이블 + 십신/12운성/지장간 인라인 + 오행 분포 + 음양 균형 + 일간 분석
  */
 
 import type { SajuChart, SajuPillar } from '../types.js'
 
 function formatPillar(label: string, pillar: SajuPillar | null): string {
   if (!pillar) return `${label}: (미상)`
-  return `${label}: ${pillar.hangul}(${pillar.hanja}) — 천간 ${pillar.stem}(${pillar.stemElement}/${pillar.stemYinYang}) 지지 ${pillar.branch}(${pillar.branchElement}/${pillar.branchYinYang})`
+
+  let line = `${label}: ${pillar.hangul}(${pillar.hanja}) — 천간 ${pillar.stem}(${pillar.stemElement}/${pillar.stemYinYang})`
+
+  // 천간 십신
+  if (pillar.stemSipsin) {
+    line += `[${pillar.stemSipsin}]`
+  }
+
+  line += ` 지지 ${pillar.branch}(${pillar.branchElement}/${pillar.branchYinYang})`
+
+  // 지지 십신
+  if (pillar.branchSipsin) {
+    line += `[${pillar.branchSipsin}]`
+  }
+
+  // 12운성
+  if (pillar.unseong) {
+    line += ` 운성:${pillar.unseong}`
+  }
+
+  // 지장간
+  if (pillar.janggan && pillar.janggan.length > 0) {
+    line += ` 장간:${pillar.janggan.join(',')}`
+  }
+
+  return line
 }
 
 export function formatSaju(chart: SajuChart, unknownTime: boolean): string {
