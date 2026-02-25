@@ -13,6 +13,7 @@ const navItems = [
   { href: '/explore', label: 'Explore' },
   { href: '/image', label: 'Image' },
   { href: '/video', label: 'Video' },
+  { href: '/myeongpan', label: 'Destiny' },
   { href: '/templates', label: 'Templates' },
   { href: '/pricing', label: 'Pricing' },
 ]
