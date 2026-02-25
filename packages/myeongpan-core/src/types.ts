@@ -262,3 +262,53 @@ export interface UnifiedChart {
   western: WesternChart | null
   meta: ChartMeta
 }
+
+// ============================================================
+// Interpretation — LLM 풀이 (2단계)
+// ============================================================
+
+export type InterpretationTopic = 'personality' | 'career' | 'relationships' | 'health' | 'wealth' | 'timing'
+
+export interface InterpretationOptions {
+  /** 어조 (기본: warm) */
+  tone: 'warm' | 'neutral' | 'professional'
+  /** 길이 (기본: medium) */
+  length: 'short' | 'medium' | 'long'
+  /** 주제 필터 (비워두면 전체) */
+  topics?: InterpretationTopic[]
+  /** 언어 (기본: ko) */
+  language?: 'ko' | 'en'
+}
+
+export interface InterpretationSection {
+  topic: InterpretationTopic
+  title: string
+  body: string
+  crossReferences: string[]
+}
+
+export interface CrossSystemAnalysis {
+  /** 체계 간 공통점 */
+  consensus: string[]
+  /** 체계 간 차이점/대비 */
+  contrasts: string[]
+  /** 종합 분석 */
+  synthesis: string
+}
+
+export interface InterpretationMeta {
+  model: string
+  latencyMs: number
+  inputTokenEstimate: number
+  options: InterpretationOptions
+  chartConfigHash: string
+}
+
+export interface InterpretationResult {
+  summary: string
+  keywords: string[]
+  sections: InterpretationSection[]
+  crossSystemAnalysis: CrossSystemAnalysis
+  systemsUsed: ('saju' | 'ziwei' | 'western')[]
+  meta: InterpretationMeta
+}

@@ -194,6 +194,73 @@ export interface Database {
           completed_at?: string | null
         }
       }
+      myeongpan_charts: {
+        Row: {
+          id: string
+          user_id: string
+          birth_profile: Record<string, unknown>
+          chart: Record<string, unknown>
+          config_hash: string
+          place_name: string | null
+          gender: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          birth_profile: Record<string, unknown>
+          chart: Record<string, unknown>
+          config_hash: string
+          place_name?: string | null
+          gender: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          birth_profile?: Record<string, unknown>
+          chart?: Record<string, unknown>
+          config_hash?: string
+          place_name?: string | null
+          gender?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      myeongpan_interpretations: {
+        Row: {
+          id: string
+          chart_id: string
+          user_id: string
+          interpretation: Record<string, unknown>
+          options: Record<string, unknown>
+          model: string
+          latency_ms: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          chart_id: string
+          user_id: string
+          interpretation: Record<string, unknown>
+          options: Record<string, unknown>
+          model: string
+          latency_ms?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          chart_id?: string
+          user_id?: string
+          interpretation?: Record<string, unknown>
+          options?: Record<string, unknown>
+          model?: string
+          latency_ms?: number | null
+          created_at?: string
+        }
+      }
     }
   }
 }
