@@ -42,8 +42,11 @@ function getRateLimiter(key: string, config: { maxRequests: number; windowMs: nu
 
 export function createApiHandler<T>(
   handler: ApiHandlerFn<T>,
-  options: CreateApiHandlerOptions = { requireAuth: true }
+  options: CreateApiHandlerOptions = {},
 ): (request: NextRequest) => Promise<NextResponse> {
+  // requireAuth는 명시적으로 false 전달하지 않는 한 항상 true
+  const requireAuth = options.requireAuth !== false
+
   return async (request: NextRequest) => {
     const requestContext = await getRequestContext()
     const { requestId } = requestContext
@@ -61,7 +64,7 @@ export function createApiHandler<T>(
     try {
       const supabase = await createClient()
 
-      if (options.requireAuth) {
+      if (requireAuth) {
         const { data: { user }, error: authError } = await supabase.auth.getUser()
 
         if (authError || !user) {

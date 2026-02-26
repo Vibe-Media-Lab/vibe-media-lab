@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { createApiHandler } from '@/lib/api'
 import { ApiError } from '@vibe-media-lab/shared'
 import { imageToVideo, textToVideo } from '@/lib/services/video-service'
+import { saveToLibrary } from '@/lib/services/library-saver'
 import { getAllowedIds, getModelConstraints } from '@/lib/models/helpers'
 import { validateFetchUrl } from '@/lib/security/validate-url'
 import type { GenerationResult } from '@/lib/services/types'
@@ -20,6 +21,7 @@ const generateRequestSchema = z.object({
 interface GenerateResponse {
   success: boolean
   url?: string
+  dbId?: string
   error?: string
   metadata?: Record<string, unknown>
 }
@@ -108,10 +110,36 @@ export const POST = createApiHandler<GenerateResponse>(
       })
     }
 
+    // 서비스 실패 시 ApiError throw → HTTP 에러 상태 + Sentry 캡처
+    if (!result.success) {
+      throw ApiError.internal(result.error || '비디오 생성에 실패했습니다')
+    }
+
+    // 라이브러리에 자동 저장
+    let dbId: string | undefined
+    if (result.url) {
+      const saveResult = await saveToLibrary({
+        userId: user.id,
+        mediaType: 'video',
+        prompt,
+        outputUrl: result.url,
+        provider: (result.metadata?.actualProvider ?? result.metadata?.provider ?? 'unknown') as string,
+        model: (result.metadata?.actualModel ?? result.metadata?.model ?? 'unknown') as string,
+        durationSeconds: duration ? parseInt(duration, 10) : undefined,
+        config: {
+          aspectRatio,
+          resolution,
+          sound,
+          ...(result.metadata ?? {}),
+        },
+      })
+      dbId = saveResult.id
+    }
+
     return {
-      success: result.success,
+      success: true,
       url: result.url,
-      error: result.error,
+      dbId,
       metadata: result.metadata,
     }
   },

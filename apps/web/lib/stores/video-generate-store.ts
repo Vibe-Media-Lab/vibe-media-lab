@@ -291,9 +291,11 @@ export const useVideoGenerateStore = create<VideoGenerateState & VideoGenerateAc
               ...(tailImageUrl ? { tailImageUrl } : {}),
             }),
           })
+
           const json = await res.json()
           if (!res.ok || !json.success) {
-            throw new Error(json.error?.message || '비디오 생성에 실패했습니다')
+            const msg = json.error?.message || json.data?.error || '비디오 생성에 실패했습니다'
+            throw new Error(msg)
           }
 
           set({
