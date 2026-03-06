@@ -1,0 +1,10 @@
+# 기본: 모든 PR은 메인 담당자 리뷰
+*                                    @vibemedialab003
+
+# 공유 영역 (반드시 리뷰)
+apps/web/components/shared/          @vibemedialab003
+apps/web/lib/                        @vibemedialab003
+apps/web/utils/                      @vibemedialab003
+packages/                            @vibemedialab003
+CLAUDE.md                            @vibemedialab003
+GEMINI.md                            @vibemedialab003
