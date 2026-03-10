@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { WorkflowStep, MediaType } from '@vibe-media-lab/shared'
+import type { WorkflowStep, MediaType, GenerationReviewStepConfig } from '@vibe-media-lab/shared'
 import type { ModelCapability } from '@/lib/models/types'
 import { ENABLED } from '@/lib/models/enabled'
 import { getStepPolicy } from '@/lib/models/workflow-policies'
@@ -417,6 +417,21 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>((set, ge
   },
 }))
 
+/**
+ * 마지막 스텝에서 컨테이너 레벨 "생성하기" 버튼을 표시할지 결정.
+ * - generation-review + video-player: WorkflowResult 전환 필요 → 표시
+ * - generation-review + 그 외: 내부 "생성 시작" 버튼이 있음 → 숨김
+ * - ai-generate: 내부 "생성하기" 버튼이 있음 → 숨김
+ * - 그 외 (config, text-input, style-select 등): 아직 출력 계약 없음 → 숨김
+ */
+export function shouldShowContainerAction(lastStep: WorkflowStep): boolean {
+  if (lastStep.type === 'generation-review') {
+    const config = lastStep.config as GenerationReviewStepConfig
+    return config.previewType === 'video-player'
+  }
+  return false
+}
+
 export function isStepComplete(stepData: StepData, step: WorkflowStep): boolean {
   const data = stepData[step.id]
 
@@ -438,7 +453,7 @@ export function isStepComplete(stepData: StepData, step: WorkflowStep): boolean 
 
   // image-select 스텝: selectedImageId 필수 (handleEdit이 value.data를 교체하므로 data.data 안에 저장됨)
   if (step.type === 'generation-review') {
-    const config = step.config as import('@vibe-media-lab/shared').GenerationReviewStepConfig
+    const config = step.config as GenerationReviewStepConfig
     if (config.previewType === 'image-select') {
       const genResult = data as { data?: Record<string, unknown> }
       const innerData = genResult?.data as { selectedImageId?: string } | undefined

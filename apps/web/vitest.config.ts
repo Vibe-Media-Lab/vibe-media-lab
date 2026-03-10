@@ -17,6 +17,7 @@ export default defineConfig({
       'lib/models/__tests__/**/*.test.ts',
       'lib/services/__tests__/**/*.test.ts',
       'lib/security/__tests__/**/*.test.ts',
+      'lib/stores/__tests__/**/*.test.ts',
       'lib/api/**/__tests__/**/*.test.ts',
       'app/api/**/__tests__/**/*.test.ts',
     ],

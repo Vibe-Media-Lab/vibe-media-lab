@@ -60,6 +60,8 @@ export function GeneratingPreview({
     switch (previewType) {
       case 'image-grid':
       case 'shot-gallery':
+      case 'image-select':
+      case 'character-profile':
         return (
           <ImageGridSkeleton
             count={effectiveCount}

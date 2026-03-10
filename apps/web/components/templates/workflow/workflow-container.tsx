@@ -12,6 +12,7 @@ import {
   useWorkflowStore,
   canProceedToNext,
   getWorkflowProgress,
+  shouldShowContainerAction,
 } from '@/lib/stores/workflow-store'
 import type { Template } from '@vibe-media-lab/shared'
 
@@ -152,6 +153,8 @@ export function WorkflowContainer({ template }: WorkflowContainerProps) {
   const currentStep = steps[currentStepIndex]
   const canGoNext = canProceedToNext(stepData, steps, currentStepIndex)
   const isLastStep = currentStepIndex === steps.length - 1
+  const lastStep = steps[steps.length - 1]
+  const showGenerateButton = isLastStep && lastStep && shouldShowContainerAction(lastStep)
   const progress = getWorkflowProgress(stepData, steps)
 
   const handleStepDataChange = (value: unknown) => {
@@ -161,12 +164,17 @@ export function WorkflowContainer({ template }: WorkflowContainerProps) {
   }
 
   const handleGenerate = async () => {
-    // final 단계 stepData에서 videoUrl 추출 시도
-    // 저장 구조: { data: { success: true, data: { videoUrl, ... } }, generatedAt }
-    const finalStepData = stepData['final'] as {
-      data?: { success?: boolean; data?: { videoUrl?: string } }
+    const lastStepId = steps[steps.length - 1]?.id
+    if (!lastStepId) {
+      setError('워크플로우 스텝 구성 오류')
+      return
+    }
+
+    const lastStepValue = stepData[lastStepId] as {
+      data?: { success?: boolean; data?: Record<string, unknown> }
     } | undefined
-    const videoUrl = finalStepData?.data?.data?.videoUrl
+
+    const videoUrl = (lastStepValue?.data?.data as { videoUrl?: string })?.videoUrl
 
     if (videoUrl) {
       setOutputUrl(videoUrl)
@@ -174,8 +182,7 @@ export function WorkflowContainer({ template }: WorkflowContainerProps) {
       return
     }
 
-    // final 데이터가 없으면 에러
-    setError('최종 영상이 아직 생성되지 않았습니다. 최종 편집 단계에서 먼저 영상을 생성해주세요.')
+    setError('최종 결과가 아직 생성되지 않았습니다. 먼저 생성을 완료해주세요.')
   }
 
   const handleReset = () => {
@@ -246,7 +253,7 @@ export function WorkflowContainer({ template }: WorkflowContainerProps) {
   }
 
   // Result state (generating, completed, failed)
-  if (status === 'generating' || status === 'completed' || status === 'failed') {
+  if (status === 'generating' || status === 'failed' || (status === 'completed' && outputUrl)) {
     return (
       <div className="mx-auto max-w-5xl">
         <div className="mb-6">
@@ -352,7 +359,7 @@ export function WorkflowContainer({ template }: WorkflowContainerProps) {
           {progress}% 완료
         </div>
 
-        {isLastStep ? (
+        {showGenerateButton ? (
           <Button
             onClick={handleGenerate}
             disabled={!canGoNext}
@@ -361,6 +368,8 @@ export function WorkflowContainer({ template }: WorkflowContainerProps) {
             <Sparkles className="mr-2 h-4 w-4" />
             생성하기
           </Button>
+        ) : isLastStep ? (
+          <div className="w-[1px]" />
         ) : (
           <Button
             onClick={nextStep}
