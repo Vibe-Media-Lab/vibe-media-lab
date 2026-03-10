@@ -9,6 +9,9 @@ import {
   VideoTimelinePreview,
   VideoPlayerPreview,
   AudioPlayerPreview,
+  CharacterQuickstartPreview,
+  ImageSelectPreview,
+  CharacterProfilePreview,
 } from './previews'
 import { unwrapApiData } from '@/lib/workflow/helpers'
 
@@ -181,6 +184,29 @@ export function Preview({
           regenerateMode={regenerateMode}
           selectedForRegenerate={selectedForRegenerate}
           onToggleRegenerate={onToggleRegenerate}
+        />
+      )
+    case 'character-quickstart':
+      return (
+        <CharacterQuickstartPreview
+          data={data}
+          editable={editable}
+          onEdit={onEdit}
+        />
+      )
+    case 'image-select':
+      return (
+        <ImageSelectPreview
+          data={data}
+          onEdit={onEdit}
+          onDownloadItem={onDownloadItem}
+        />
+      )
+    case 'character-profile':
+      return (
+        <CharacterProfilePreview
+          data={data}
+          onDownloadItem={onDownloadItem}
         />
       )
     default:

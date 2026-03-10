@@ -436,12 +436,22 @@ export function isStepComplete(stepData: StepData, step: WorkflowStep): boolean 
     return false
   }
 
-  // image-select 스텝: selectedImageId 필수
+  // image-select 스텝: selectedImageId 필수 (handleEdit이 value.data를 교체하므로 data.data 안에 저장됨)
   if (step.type === 'generation-review') {
     const config = step.config as import('@vibe-media-lab/shared').GenerationReviewStepConfig
     if (config.previewType === 'image-select') {
-      const result = data as { selectedImageId?: string }
-      if (!result?.selectedImageId) return false
+      const genResult = data as { data?: Record<string, unknown> }
+      const innerData = genResult?.data as { selectedImageId?: string } | undefined
+      if (!innerData?.selectedImageId) return false
+    }
+  }
+
+  // archetype-select 스텝: 아키타입 선택 필수, freetext인 경우 텍스트도 필수
+  if (step.type === 'archetype-select') {
+    const archData = data as { archetype?: string; freeText?: string }
+    if (!archData?.archetype) return false
+    if (archData.archetype === 'freetext' && (!archData.freeText || archData.freeText.trim() === '')) {
+      return false
     }
   }
 

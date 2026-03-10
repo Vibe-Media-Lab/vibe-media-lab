@@ -10,6 +10,7 @@ import type {
   ConfigStepConfig,
   GenerationReviewStepConfig,
   MediaChoiceStepConfig,
+  ArchetypeSelectStepConfig,
 } from '@vibe-media-lab/shared'
 import { TextInputStep } from './steps/text-input-step'
 import { MediaUploadStep } from './steps/media-upload-step'
@@ -18,6 +19,7 @@ import { AiGenerateStep } from './steps/ai-generate-step'
 import { ConfigStep } from './steps/config-step'
 import { GenerationReviewStep } from './steps/generation-review-step'
 import { MediaChoiceStep } from './steps/media-choice-step'
+import { ArchetypeSelectStep } from './steps/archetype-select-step'
 
 interface WorkflowStepProps {
   step: WorkflowStepType
@@ -107,6 +109,16 @@ export function WorkflowStep({
           onChange={onChange}
           inputContext={inputContext}
           projectId={projectId}
+        />
+      )
+
+    case 'archetype-select':
+      return (
+        <ArchetypeSelectStep
+          stepId={step.id}
+          config={step.config as ArchetypeSelectStepConfig}
+          value={(value as { archetype: string; freeText?: string }) || null}
+          onChange={onChange}
         />
       )
 

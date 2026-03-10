@@ -1065,6 +1065,86 @@ export const TEMPLATES: Template[] = [
     },
     relatedTemplates: ['tutorial', 'satisfying', 'aesthetic'],
   },
+  // ============================================================
+  // Character Creator
+  // ============================================================
+  {
+    id: 'character-creator',
+    title: 'Character Creator',
+    description: 'AI로 나만의 캐릭터를 디자인하세요',
+    longDescription:
+      '아키타입을 선택하거나 자유롭게 설명하면 AI가 캐릭터 프로필을 생성합니다. 초상화 4장 중 마음에 드는 것을 선택하고, 다양한 포즈와 표정의 캐릭터 시트를 완성하세요.',
+    views: '45K',
+    video: '/templates/character-creator.mp4',
+    poster: '/templates/character-creator.jpg',
+    badge: 'NEW',
+    category: 'character',
+    tags: ['character', 'design', 'portrait', 'illustration'],
+    estimatedTime: '5-10분',
+    difficulty: 'easy',
+    platforms: ['youtube', 'instagram'],
+    workflow: {
+      steps: [
+        {
+          id: 'archetype',
+          type: 'archetype-select',
+          label: '캐릭터 아키타입',
+          description: '캐릭터의 기본 유형을 선택하거나 직접 설명해주세요',
+          required: true,
+          config: {
+            freeTextPlaceholder: '예: 날개 달린 고양이 요정...',
+            maxFreeTextLength: 500,
+          },
+        },
+        {
+          id: 'quickstart',
+          type: 'generation-review',
+          label: '캐릭터 프로필',
+          description: 'AI가 캐릭터 프로필을 생성합니다. 자유롭게 편집할 수 있습니다.',
+          required: true,
+          config: {
+            generateAction: 'character/quickstart',
+            previewType: 'character-quickstart',
+            editable: true,
+          },
+        },
+        {
+          id: 'main-visual',
+          type: 'generation-review',
+          label: '초상화 생성',
+          description: '프로필 기반으로 4장의 초상화를 생성합니다. 1장을 선택하세요.',
+          required: true,
+          config: {
+            generateAction: 'character/main-visual',
+            previewType: 'image-select',
+            batchSize: 4,
+            progress: { show: true, perItem: true },
+            modelSelection: getModelSelectionConfigForWorkflow('character-creator', 'main-visual', 'text-to-image'),
+          },
+        },
+        {
+          id: 'character-sheet',
+          type: 'generation-review',
+          label: '캐릭터 시트',
+          description: '선택한 초상화를 기반으로 다양한 포즈/표정의 시트를 생성합니다.',
+          required: true,
+          config: {
+            generateAction: 'character/character-sheet',
+            previewType: 'character-profile',
+            batchSize: 4,
+            progress: { show: true, perItem: true },
+            downloadable: true,
+            modelSelection: getModelSelectionConfigForWorkflow('character-creator', 'character-sheet', 'image-to-image'),
+          },
+        },
+      ],
+      outputConfig: {
+        aspectRatio: '1:1',
+        format: 'png',
+      },
+    },
+    relatedTemplates: ['kids-animation'],
+  },
 ]
 
 export function getTemplateById(id: string): Template | undefined {

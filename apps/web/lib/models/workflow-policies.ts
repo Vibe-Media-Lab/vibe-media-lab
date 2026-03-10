@@ -71,10 +71,34 @@ export const KIDS_ANIMATION_POLICY: WorkflowPolicy = {
   },
 }
 
+// ─── Character Creator ───
+
+export const CHARACTER_CREATOR_POLICY: WorkflowPolicy = {
+  workflowId: 'character-creator',
+  label: 'Character Creator',
+  steps: {
+    'main-visual:text-to-image': {
+      allowedModels: ['nano-banana-pro', 'fal-ai/flux-2-pro'],
+      defaultModel: 'nano-banana-pro',
+      featured: ['nano-banana-pro', 'fal-ai/flux-2-pro'],
+      fallbacks: { 'nano-banana-pro': 'gemini-3-pro-image-preview' },
+      recommendedModel: 'nano-banana-pro',
+    },
+    'character-sheet:image-to-image': {
+      allowedModels: ['fal-ai/nano-banana-pro/edit'],
+      defaultModel: 'fal-ai/nano-banana-pro/edit',
+      featured: ['fal-ai/nano-banana-pro/edit'],
+      fallbacks: { 'fal-ai/nano-banana-pro/edit': 'gemini-3-pro-image-preview' },
+      recommendedModel: 'fal-ai/nano-banana-pro/edit',
+    },
+  },
+}
+
 // ─── Registry ───
 
 const WORKFLOW_POLICIES: Record<string, WorkflowPolicy> = {
   'kids-animation': KIDS_ANIMATION_POLICY,
+  'character-creator': CHARACTER_CREATOR_POLICY,
 }
 
 /** 워크플로우 정책 조회 (없으면 null) */

@@ -21,6 +21,9 @@ const REQUIRED_ACTIONS = [
   'kids/videos',
   'kids/audio',
   'kids/final',
+  'character/quickstart',
+  'character/main-visual',
+  'character/character-sheet',
 ]
 
 export function assertAllRegistered(): void {
@@ -29,6 +32,9 @@ export function assertAllRegistered(): void {
     const msg = `[StepAction Registry] 미등록 액션: ${missing.join(', ')}`
     if (process.env.NODE_ENV === 'development') {
       console.error(msg)
+    } else {
+      // 프로덕션: 조용히 삼키지 않고 로그 남김 (Sentry captureMessage 등 연동 가능)
+      console.warn(msg)
     }
   }
 }
@@ -42,6 +48,11 @@ import './kids/shots-action'
 import './kids/videos-action'
 import './kids/audio-action'
 import './kids/final-action'
+
+// Character Creator
+import './character/quickstart-action'
+import './character/main-visual-action'
+import './character/character-sheet-action'
 
 // 부팅 검증
 assertAllRegistered()

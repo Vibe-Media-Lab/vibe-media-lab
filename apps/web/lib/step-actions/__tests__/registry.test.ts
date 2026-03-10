@@ -31,6 +31,36 @@ describe('StepAction Registry', () => {
     })
   })
 
+  describe('character 액션 등록', () => {
+    const characterActions = [
+      'character/quickstart',
+      'character/main-visual',
+      'character/character-sheet',
+    ]
+
+    for (const key of characterActions) {
+      it(`${key} is registered`, () => {
+        const action = getAction(key)
+        expect(action).toBeDefined()
+        expect(action!.actionKey).toBe(key)
+      })
+    }
+  })
+
+  describe('character 액션 메타데이터', () => {
+    it('quickstart has correct endpoint', () => {
+      expect(getAction('character/quickstart')!.endpoint).toBe('/api/character/quickstart')
+    })
+
+    it('main-visual has correct endpoint', () => {
+      expect(getAction('character/main-visual')!.endpoint).toBe('/api/character/main-visual')
+    })
+
+    it('character-sheet has correct endpoint', () => {
+      expect(getAction('character/character-sheet')!.endpoint).toBe('/api/character/character-sheet')
+    })
+  })
+
   describe('미등록 액션', () => {
     it('returns undefined for nonexistent key', () => {
       expect(getAction('nonexistent')).toBeUndefined()

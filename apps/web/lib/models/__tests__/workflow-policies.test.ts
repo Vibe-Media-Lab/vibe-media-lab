@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { getWorkflowPolicy, getStepPolicy, KIDS_ANIMATION_POLICY } from '../workflow-policies'
+import { getWorkflowPolicy, getStepPolicy, KIDS_ANIMATION_POLICY, CHARACTER_CREATOR_POLICY } from '../workflow-policies'
 import { getModelSelectionConfigForWorkflow, getStepPolicyForWorkflow, buildRouteOverrides } from '../helpers'
 import { routeModel, getManualFallback } from '../router'
 
@@ -112,6 +112,93 @@ describe('KIDS_ANIMATION_POLICY 구조', () => {
 
 // ============================================================
 // helpers.ts — getModelSelectionConfigForWorkflow
+// ============================================================
+
+// ============================================================
+// CHARACTER_CREATOR_POLICY
+// ============================================================
+
+describe('CHARACTER_CREATOR_POLICY', () => {
+  it('character-creator 정책을 반환한다', () => {
+    const policy = getWorkflowPolicy('character-creator')
+    expect(policy).not.toBeNull()
+    expect(policy!.workflowId).toBe('character-creator')
+    expect(policy!.label).toBe('Character Creator')
+  })
+
+  it('main-visual:text-to-image → 정책 반환', () => {
+    const policy = getStepPolicy('character-creator', 'main-visual', 'text-to-image')
+    expect(policy).not.toBeNull()
+    expect(policy!.defaultModel).toBe('nano-banana-pro')
+    expect(policy!.allowedModels).toContain('nano-banana-pro')
+    expect(policy!.allowedModels).toContain('fal-ai/flux-2-pro')
+  })
+
+  it('character-sheet:image-to-image → 정책 반환', () => {
+    const policy = getStepPolicy('character-creator', 'character-sheet', 'image-to-image')
+    expect(policy).not.toBeNull()
+    expect(policy!.defaultModel).toBe('fal-ai/nano-banana-pro/edit')
+    expect(policy!.allowedModels).toEqual(['fal-ai/nano-banana-pro/edit'])
+  })
+
+  it('모든 스텝에 필수 필드가 존재한다', () => {
+    for (const [, stepPolicy] of Object.entries(CHARACTER_CREATOR_POLICY.steps)) {
+      expect(stepPolicy.allowedModels.length).toBeGreaterThan(0)
+      expect(stepPolicy.defaultModel).toBeTruthy()
+      expect(stepPolicy.allowedModels).toContain(stepPolicy.defaultModel)
+      expect(Array.isArray(stepPolicy.featured)).toBe(true)
+      expect(typeof stepPolicy.fallbacks).toBe('object')
+    }
+  })
+
+  it('main-visual fallback → gemini', () => {
+    const policy = getStepPolicy('character-creator', 'main-visual', 'text-to-image')
+    expect(policy!.fallbacks).toEqual({ 'nano-banana-pro': 'gemini-3-pro-image-preview' })
+  })
+
+  it('character-sheet fallback → gemini', () => {
+    const policy = getStepPolicy('character-creator', 'character-sheet', 'image-to-image')
+    expect(policy!.fallbacks).toEqual({ 'fal-ai/nano-banana-pro/edit': 'gemini-3-pro-image-preview' })
+  })
+})
+
+describe('buildRouteOverrides for character-creator', () => {
+  it('main-visual:text-to-image → nano-banana-pro fallback + defaultId', () => {
+    const overrides = buildRouteOverrides('character-creator', 'main-visual', 'text-to-image')
+    expect(overrides).toBeDefined()
+    expect(overrides!.fallbacks).toEqual({ 'nano-banana-pro': 'gemini-3-pro-image-preview' })
+    expect(overrides!.defaultId).toBe('nano-banana-pro')
+  })
+
+  it('character-sheet:image-to-image → fal edit fallback + defaultId', () => {
+    const overrides = buildRouteOverrides('character-creator', 'character-sheet', 'image-to-image')
+    expect(overrides).toBeDefined()
+    expect(overrides!.fallbacks).toEqual({ 'fal-ai/nano-banana-pro/edit': 'gemini-3-pro-image-preview' })
+    expect(overrides!.defaultId).toBe('fal-ai/nano-banana-pro/edit')
+  })
+})
+
+describe('getModelSelectionConfigForWorkflow for character-creator', () => {
+  it('main-visual:text-to-image → 2개 모델 반환', () => {
+    const config = getModelSelectionConfigForWorkflow('character-creator', 'main-visual', 'text-to-image')
+    expect(config.category).toBe('text-to-image')
+    expect(config.defaultModelId).toBe('nano-banana-pro')
+    const ids = config.options.map(o => o.id)
+    expect(ids).toContain('nano-banana-pro')
+    expect(ids).toContain('fal-ai/flux-2-pro')
+  })
+
+  it('character-sheet:image-to-image → 1개 모델 반환', () => {
+    const config = getModelSelectionConfigForWorkflow('character-creator', 'character-sheet', 'image-to-image')
+    expect(config.category).toBe('image-to-image')
+    expect(config.defaultModelId).toBe('fal-ai/nano-banana-pro/edit')
+    const ids = config.options.map(o => o.id)
+    expect(ids).toEqual(['fal-ai/nano-banana-pro/edit'])
+  })
+})
+
+// ============================================================
+// helpers.ts — getModelSelectionConfigForWorkflow (Kids Animation)
 // ============================================================
 
 describe('getModelSelectionConfigForWorkflow', () => {
