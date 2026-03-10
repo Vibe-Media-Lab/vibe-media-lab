@@ -106,7 +106,7 @@ async function generateTTSInternal(params: TTSParams): Promise<GenerationResult>
   }
 
   // 1차 시도 — provider-aware dispatch
-  let result: GenerationResult = await dispatchTTSGeneration(params, route)
+  const result: GenerationResult = await dispatchTTSGeneration(params, route)
 
   // 실패 시 fallback — route.modelId 기준, provider-aware dispatch
   if (!result.success) {

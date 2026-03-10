@@ -16,7 +16,7 @@ import { toast } from 'sonner'
 const ALL_ASPECT_RATIOS: AspectRatio[] = [
   '1:1', '4:3', '16:9', '21:9', '5:4', '3:2', '2:3', '9:16', '3:4', '4:5',
 ]
-const ALL_RESOLUTIONS: ImageResolution[] = ['1K', '2K', '4K']
+const _ALL_RESOLUTIONS: ImageResolution[] = ['1K', '2K', '4K']
 
 const RESOLUTION_OPTIONS: {
   value: ImageResolution
@@ -100,6 +100,7 @@ export function PromptBar() {
               <div className="flex flex-1 items-center gap-2 overflow-x-auto">
                 {referencePreviewUrls.map((url, i) => (
                   <div key={i} className="group/thumb relative shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- blob URL from user upload */}
                     <img
                       src={url}
                       alt={`Reference ${i + 1}`}

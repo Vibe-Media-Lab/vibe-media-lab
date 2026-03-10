@@ -19,7 +19,7 @@ const finalAction: StepAction = {
     const storyData = unwrapStepResult(kidsCtx.story)
     const scriptData = unwrapStepResult(kidsCtx.script)
     const story = storyData?.story
-    const script = scriptData?.script
+    const _script = scriptData?.script
 
     const anchors = kidsCtx.anchors?.generated?.map((a) => ({
       id: a.id,

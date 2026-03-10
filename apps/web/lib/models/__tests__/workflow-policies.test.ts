@@ -90,7 +90,7 @@ describe('getStepPolicy', () => {
 
 describe('KIDS_ANIMATION_POLICY 구조', () => {
   it('모든 스텝에 필수 필드가 존재한다', () => {
-    for (const [key, stepPolicy] of Object.entries(KIDS_ANIMATION_POLICY.steps)) {
+    for (const [_key, stepPolicy] of Object.entries(KIDS_ANIMATION_POLICY.steps)) {
       expect(stepPolicy.allowedModels.length).toBeGreaterThan(0)
       expect(stepPolicy.defaultModel).toBeTruthy()
       expect(stepPolicy.allowedModels).toContain(stepPolicy.defaultModel)

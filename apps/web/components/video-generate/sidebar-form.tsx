@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { ImageIcon, Type, Loader2, Check, Upload, X } from 'lucide-react'
+import { ImageIcon, Type, Loader2, Check, X } from 'lucide-react'
 import { useVideoGenerateStore, getVideoStoreConstraints } from '@/lib/stores/video-generate-store'
 import { VideoModelSelectorPopup } from './model-selector-popup'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -144,6 +144,7 @@ export function SidebarForm({ className, onGenerateSuccess }: SidebarFormProps) 
           <div>
             {hasImage ? (
               <div className="group/img relative overflow-hidden rounded-xl border border-white/10">
+                {/* eslint-disable-next-line @next/next/no-img-element -- blob URL from user upload */}
                 <img
                   src={imagePreviewUrl!}
                   alt="Start frame"
@@ -175,6 +176,7 @@ export function SidebarForm({ className, onGenerateSuccess }: SidebarFormProps) 
             <div>
               {endImagePreviewUrl ? (
                 <div className="group/endimg relative overflow-hidden rounded-xl border border-white/10">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- blob URL from user upload */}
                   <img
                     src={endImagePreviewUrl}
                     alt="End frame"

@@ -2,6 +2,7 @@
 
 import * as Sentry from '@sentry/nextjs'
 import { useEffect } from 'react'
+import Link from 'next/link'
 
 export default function Error({
   error,
@@ -54,12 +55,12 @@ export default function Error({
           >
             다시 시도
           </button>
-          <a
+          <Link
             href="/"
             className="rounded-lg border border-white/20 px-6 py-2.5 text-sm font-medium text-white transition-all hover:bg-white/10"
           >
             홈으로
-          </a>
+          </Link>
         </div>
       </div>
     </div>

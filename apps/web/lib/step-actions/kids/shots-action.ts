@@ -3,7 +3,6 @@ import {
   asKidsContext,
   unwrapStepResult,
 } from '@/lib/api/kids-animation/types'
-import type { ApiStepResult, ShotsResponse } from '@/lib/api/kids-animation/types'
 import { selectReferenceImages } from '@/lib/utils/shot-anchor-mapper'
 import { registerAction } from '../_action-map'
 import type { StepAction, StepActionContext, StepCallbacks } from '../types'

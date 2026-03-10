@@ -70,7 +70,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 // Mock env vars
 const originalEnv = process.env
 
-import type { UnifiedChart, InterpretationOptions } from '@vibe-media-lab/myeongpan-core'
+import type { UnifiedChart } from '@vibe-media-lab/myeongpan-core'
 
 // ============================================================
 // Fixtures

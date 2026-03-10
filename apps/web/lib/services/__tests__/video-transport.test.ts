@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { getVideoTransport, VIDEO_TRANSPORT_MAP } from '../video-transport'
-import type { VideoTransport } from '../video-transport'
 
 // ============================================================
 // getVideoTransport

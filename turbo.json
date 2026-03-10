@@ -9,7 +9,12 @@
     "KIEAI_API_KEY",
     "FAL_KEY",
     "CREATOMATE_API_KEY",
-    "SUPABASE_SERVICE_ROLE_KEY"
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SENTRY_ORG",
+    "SENTRY_PROJECT",
+    "SENTRY_AUTH_TOKEN",
+    "CI",
+    "NEXT_RUNTIME"
   ],
   "tasks": {
     "build": {

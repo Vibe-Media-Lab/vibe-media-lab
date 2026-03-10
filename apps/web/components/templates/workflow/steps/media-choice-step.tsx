@@ -21,10 +21,8 @@ import { Progress } from '@/components/ui/progress'
 import type {
   MediaChoiceStepConfig,
   GenerationProgress,
-  GenerationProgressItem,
 } from '@vibe-media-lab/shared'
 import {
-  DEFAULT_KIDS_SETUP,
   asKidsContext,
 } from '@/lib/api/kids-animation/types'
 import { unwrapStepResult } from '@/lib/workflow/helpers'

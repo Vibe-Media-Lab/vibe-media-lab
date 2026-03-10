@@ -5,7 +5,6 @@
  * 미등록 모델 → fail-closed 에러.
  */
 
-import { FalError } from './fal-client'
 import { KieaiError } from './kieai-client'
 
 // ─── Types ───

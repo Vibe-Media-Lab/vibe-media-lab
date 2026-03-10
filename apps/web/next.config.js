@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import { withSentryConfig } from '@sentry/nextjs'
 
 /** @type {import('next').NextConfig} */

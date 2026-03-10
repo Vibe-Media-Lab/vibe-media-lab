@@ -41,7 +41,6 @@ export function WorkflowContainer({ template }: WorkflowContainerProps) {
     goToStep,
     nextStep,
     prevStep,
-    startGeneration,
     setOutputUrl,
     setError,
     setCompleted,

@@ -681,7 +681,7 @@ function handleKieaiError(
 // Mock
 // ============================================================
 
-async function mockImageToVideo(params: ImageToVideoParams): Promise<GenerationResult> {
+async function mockImageToVideo(_params: ImageToVideoParams): Promise<GenerationResult> {
   await new Promise((resolve) => setTimeout(resolve, 3000))
   return {
     success: true,
@@ -690,7 +690,7 @@ async function mockImageToVideo(params: ImageToVideoParams): Promise<GenerationR
   }
 }
 
-async function mockTextToVideo(params: TextToVideoParams): Promise<GenerationResult> {
+async function mockTextToVideo(_params: TextToVideoParams): Promise<GenerationResult> {
   await new Promise((resolve) => setTimeout(resolve, 3500))
   return {
     success: true,
