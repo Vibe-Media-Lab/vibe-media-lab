@@ -4,7 +4,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { Loader2, RotateCcw, Heart, Download } from 'lucide-react'
 import type { ImageItem } from '../types'
-import { unwrapApiData } from '@/lib/api/kids-animation/types'
+import { unwrapApiData } from '@/lib/workflow/helpers'
 
 interface ImageGridPreviewProps {
   data: unknown

@@ -10,7 +10,7 @@ import {
   VideoPlayerPreview,
   AudioPlayerPreview,
 } from './previews'
-import { unwrapApiData } from '@/lib/api/kids-animation/types'
+import { unwrapApiData } from '@/lib/workflow/helpers'
 
 /**
  * video-timeline용 데이터 추출

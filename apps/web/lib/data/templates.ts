@@ -1092,4 +1092,5 @@ export const TEMPLATE_CATEGORIES = [
   { id: 'education', label: '교육', icon: 'graduation-cap' },
   { id: 'entertainment', label: '엔터', icon: 'sparkles' },
   { id: 'kids', label: '키즈', icon: 'baby' },
+  { id: 'character', label: '캐릭터', icon: 'user' },
 ] as const

@@ -10,11 +10,8 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import {
-  asKidsContext,
-  unwrapStepResult,
-  unwrapApiData,
-} from '@/lib/api/kids-animation/types'
+import { asKidsContext } from '@/lib/api/kids-animation/types'
+import { unwrapStepResult, unwrapApiData } from '@/lib/workflow/helpers'
 import { getUserFriendlyError } from '@/lib/utils/error-messages'
 import { getAction } from '@/lib/step-actions/registry'
 import type { StepActionContext, StepCallbacks } from '@/lib/step-actions/types'
@@ -79,6 +76,17 @@ function hasValidGeneratedData(val: unknown, previewType: string): boolean {
       const finalData = unwrapped as { videoUrl?: string; thumbnailUrl?: string }
       return !!(finalData?.videoUrl || finalData?.thumbnailUrl)
     }
+
+    case 'image-select': {
+      const selectData = unwrapped as { images?: Array<{ id?: string; url?: string }> }
+      if (!selectData?.images?.length) return false
+      if (!selectData.images.some(img => img?.url)) return false
+      return true
+    }
+
+    case 'character-quickstart':
+    case 'character-profile':
+      return !!unwrapped
 
     case 'text':
     case 'shot-list':

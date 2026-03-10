@@ -12,7 +12,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import type { Shot } from '../types'
-import { unwrapApiData } from '@/lib/api/kids-animation/types'
+import { unwrapApiData } from '@/lib/workflow/helpers'
 
 interface ShotGalleryPreviewProps {
   data: unknown

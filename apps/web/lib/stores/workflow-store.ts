@@ -436,6 +436,15 @@ export function isStepComplete(stepData: StepData, step: WorkflowStep): boolean 
     return false
   }
 
+  // image-select 스텝: selectedImageId 필수
+  if (step.type === 'generation-review') {
+    const config = step.config as import('@vibe-media-lab/shared').GenerationReviewStepConfig
+    if (config.previewType === 'image-select') {
+      const result = data as { selectedImageId?: string }
+      if (!result?.selectedImageId) return false
+    }
+  }
+
   return true
 }
 
@@ -463,6 +472,8 @@ const STEP_CAPABILITY_MAP: Record<string, ModelCapability> = {
   'videos':           'image-to-video',
   'audio':            'tts',
   'audio:secondary':  'bgm',
+  'main-visual':      'text-to-image',
+  'character-sheet':  'image-to-image',
 }
 
 /**

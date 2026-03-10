@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { Edit3, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { Shot, AnchorPrompt, ScriptData } from '../types'
-import { unwrapApiData } from '@/lib/api/kids-animation/types'
+import { unwrapApiData } from '@/lib/workflow/helpers'
 
 interface ShotListPreviewProps {
   data: unknown

@@ -26,8 +26,8 @@ import type {
 import {
   DEFAULT_KIDS_SETUP,
   asKidsContext,
-  unwrapStepResult,
 } from '@/lib/api/kids-animation/types'
+import { unwrapStepResult } from '@/lib/workflow/helpers'
 import { WorkflowModelPopup } from './generation-review/workflow-model-popup'
 import { useWorkflowStore } from '@/lib/stores/workflow-store'
 import { getAction } from '@/lib/step-actions/registry'

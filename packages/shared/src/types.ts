@@ -121,6 +121,7 @@ export const TemplateCategorySchema = z.enum([
   'education',
   'entertainment',
   'kids',
+  'character',
 ])
 export type TemplateCategory = z.infer<typeof TemplateCategorySchema>
 
@@ -147,6 +148,7 @@ export const WorkflowStepTypeSchema = z.enum([
   'config',
   'generation-review', // AI 생성 + 미리보기 + 승인
   'media-choice', // 업로드 OR AI 생성 선택
+  'archetype-select', // 아키타입 선택 (캐릭터 등)
 ])
 export type WorkflowStepType = z.infer<typeof WorkflowStepTypeSchema>
 
@@ -208,6 +210,9 @@ export interface GenerationReviewStepConfig {
     | 'video-timeline' // 비디오 타임라인
     | 'video-player' // 단일 비디오 플레이어
     | 'audio-player' // 오디오 플레이어
+    | 'image-select' // 이미지 단일 선택 (라디오 패턴)
+    | 'character-quickstart' // AI 설정 편집 폼
+    | 'character-profile' // 프로필 리뷰/편집
   editable?: boolean // 사용자가 결과 수정 가능 여부
   regeneratable?: boolean // 개별 항목 재생성 가능 여부
   batchSize?: number // 배치 처리 시 동시 생성 수
@@ -224,6 +229,12 @@ export interface GenerationReviewStepConfig {
   downloadable?: boolean // 결과 다운로드 가능 여부
   modelSelection?: ModelSelectionConfig
   secondaryModelSelection?: ModelSelectionConfig  // audio: TTS + BGM
+}
+
+// Archetype Select Step: 아키타입 선택 (자유 텍스트 포함)
+export interface ArchetypeSelectStepConfig {
+  freeTextPlaceholder?: string  // default: "캐릭터를 직접 설명해주세요"
+  maxFreeTextLength?: number    // default: 500
 }
 
 // Media Choice Step: 업로드 OR AI 생성 선택
@@ -292,6 +303,7 @@ export type WorkflowStepConfig =
   | ConfigStepConfig
   | GenerationReviewStepConfig
   | MediaChoiceStepConfig
+  | ArchetypeSelectStepConfig
 
 export interface WorkflowStep {
   id: string
@@ -305,7 +317,7 @@ export interface WorkflowStep {
 export interface WorkflowOutputConfig {
   aspectRatio: AspectRatio
   duration?: '5' | '10' | '30' | '60'
-  format: 'mp4' | 'webm' | 'gif'
+  format: 'mp4' | 'webm' | 'gif' | 'png'
 }
 
 export interface TemplateExample {

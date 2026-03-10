@@ -5,6 +5,7 @@ import type {
   KidsShot,
   KidsAnchor,
 } from '@vibe-media-lab/shared'
+import type { ApiStepResult } from '@/lib/workflow/helpers'
 import {
   ALLOWED_TEXT_TO_IMAGE_MODELS,
   ALLOWED_IMAGE_TO_IMAGE_MODELS,
@@ -338,11 +339,9 @@ export interface FinalResponse {
 // Step Context Types (inputContext 타입 안전성)
 // ============================================================
 
-/** API 단계 결과의 공통 래퍼 (onChange로 저장되는 구조) */
-export interface ApiStepResult<T> {
-  data: { success: boolean; data: T }
-  generatedAt: Date
-}
+// Re-export workflow helpers (하위 호환)
+export type { ApiStepResult } from '@/lib/workflow/helpers'
+export { unwrapStepResult, unwrapApiData } from '@/lib/workflow/helpers'
 
 export interface KidsSetupData {
   topic: string
@@ -402,44 +401,6 @@ export interface KidsAnimationContext {
  */
 export function asKidsContext(ctx: Record<string, unknown> | undefined): Partial<KidsAnimationContext> {
   return (ctx ?? {}) as Partial<KidsAnimationContext>
-}
-
-/**
- * ApiStepResult<T> → T 언래핑
- *
- * 워크플로우 onChange로 저장된 단계 결과에서 실제 데이터를 추출한다.
- * 저장 구조: `{ data: { success: boolean, data: T }, generatedAt: Date }`
- *
- * @example
- * const storyData = unwrapStepResult(ctx.story)
- * const story = storyData?.story // KidsStory | undefined
- */
-export function unwrapStepResult<T>(step: ApiStepResult<T> | null | undefined): T | undefined {
-  if (!step) return undefined
-  const resp = step.data
-  if (resp && typeof resp === 'object' && 'success' in resp && 'data' in resp) {
-    return resp.data
-  }
-  return resp as T | undefined
-}
-
-/**
- * API 응답 `{ success, data: T }` → T 언래핑
- *
- * 프리뷰 컴포넌트에서 `GenerationResult.data`를 받아 실제 데이터를 추출한다.
- * createApiHandler가 `{ success: true, data: T }` 형태로 래핑하므로,
- * 이를 벗기는 역할. Mock 데이터처럼 래핑되지 않은 경우 그대로 반환한다.
- *
- * @example
- * // 프리뷰 컴포넌트에서:
- * const response = unwrapApiData<ShotsResponse>(data)
- * const shots = response?.shots || []
- */
-export function unwrapApiData<T>(data: unknown): T {
-  if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
-    return (data as { data: T }).data
-  }
-  return data as T
 }
 
 // ============================================================

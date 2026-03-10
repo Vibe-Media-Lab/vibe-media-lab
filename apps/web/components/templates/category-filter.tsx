@@ -10,6 +10,7 @@ import {
   GraduationCap,
   Sparkles,
   Baby,
+  User,
 } from 'lucide-react'
 import { TEMPLATE_CATEGORIES } from '@/lib/data/templates'
 
@@ -21,6 +22,7 @@ const ICONS = {
   'graduation-cap': GraduationCap,
   sparkles: Sparkles,
   baby: Baby,
+  user: User,
 } as const
 
 interface CategoryFilterProps {

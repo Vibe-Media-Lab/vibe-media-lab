@@ -20,20 +20,12 @@ import {
   KIDS_ZOOTOPIA_ACTS,
   KIDS_VOICE_PROFILES,
 } from '@vibe-media-lab/shared'
-import { getLogger } from '@/lib/logger'
-import { fetchWithTimeout } from '@/lib/utils/fetch-with-timeout'
-import { retryWithBackoff } from '@/lib/utils/retry-with-backoff'
+import { callGeminiJSON } from './gemini-client'
 
 // Re-export ActKey for route.ts
 export type { ActKey }
 
-const logger = getLogger('llm-service')
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const IS_MOCK = !GEMINI_API_KEY
-
-const GEMINI_API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+const IS_MOCK = !process.env.GEMINI_API_KEY
 
 // ============================================================
 // Types
@@ -71,97 +63,6 @@ export interface GeneratedScript {
     location?: string
   }>
   bgmPrompt: string
-}
-
-// ============================================================
-// Gemini API Client
-// ============================================================
-
-async function callGemini(prompt: string): Promise<string> {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured')
-  }
-
-  return retryWithBackoff(
-    async () => {
-      const response = await fetchWithTimeout(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        timeoutMs: 90000,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 16384,
-            responseMimeType: 'application/json',
-          },
-        }),
-      })
-
-      if (!response.ok) {
-        const errorBody = await response.text()
-        logger.error('Gemini API request failed', {
-          status: response.status,
-          statusText: response.statusText,
-          errorBody: errorBody.slice(0, 500),
-        })
-        throw new Error(`Gemini API error: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
-
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-
-      if (!text) {
-        logger.error('No text in Gemini response', {
-          hasCandidate: !!data.candidates?.[0],
-          hasContent: !!data.candidates?.[0]?.content,
-        })
-        throw new Error('No response from Gemini')
-      }
-
-      return text
-    },
-    {
-      maxRetries: 2,
-      onRetry: (error, attempt, delayMs) => {
-        logger.warn('Gemini LLM API retry', {
-          attempt,
-          delayMs,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      },
-    }
-  )
-}
-
-function extractJSON<T>(text: string): T {
-  // Try to extract JSON from markdown code blocks or raw text
-  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  const jsonStr = (jsonMatch?.[1] ?? text).trim()
-
-  // Find the first { and last }
-  const start = jsonStr.indexOf('{')
-  const end = jsonStr.lastIndexOf('}')
-
-  if (start === -1 || end === -1) {
-    logger.error('No JSON found in response', {
-      responsePreview: text.slice(0, 200),
-    })
-    throw new Error('No JSON found in response')
-  }
-
-  try {
-    return JSON.parse(jsonStr.slice(start, end + 1))
-  } catch (parseError) {
-    logger.error('JSON parse error', {
-      error: parseError instanceof Error ? parseError.message : String(parseError),
-      jsonPreview: jsonStr.slice(start, end + 1).slice(0, 200),
-    })
-    throw new Error('Failed to parse JSON from response')
-  }
 }
 
 // ============================================================
@@ -363,8 +264,7 @@ ${ZOOTOPIA_PROTOCOL_PROMPT}
 - **어른도 웃을 수 있는 시각적 유머/언어유희 1개 이상 포함**
 - 폭력적이거나 무서운 내용 절대 금지`
 
-  const response = await callGemini(prompt)
-  return extractJSON<KidsStory>(response)
+  return callGeminiJSON<KidsStory>(prompt)
 }
 
 async function mockGenerateStory(
@@ -637,8 +537,7 @@ ${locationNamesList}
    - 예: "Cheerful orchestral music with gentle piano intro, building to adventurous strings, triumphant brass finale. Keep it short, around 1 minute (70 seconds)."
 `
 
-  const response = await callGemini(prompt)
-  return extractJSON<GeneratedScript>(response)
+  return callGeminiJSON<GeneratedScript>(prompt)
 }
 
 async function mockGenerateScript(
@@ -777,6 +676,6 @@ export function isLLMServiceAvailable(): boolean {
 }
 
 export function getLLMServiceProvider(): 'gemini' | 'mock' {
-  if (GEMINI_API_KEY) return 'gemini'
+  if (!IS_MOCK) return 'gemini'
   return 'mock'
 }
