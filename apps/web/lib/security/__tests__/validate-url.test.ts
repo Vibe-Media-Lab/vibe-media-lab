@@ -13,6 +13,7 @@ describe('validateFetchUrl — allowlist positive cases', () => {
     'https://cdn.aiquickdraw.com/image.png',
     'https://example.supabase.co/image.png',
     'https://fal-cdn.fal.ai/image.png',
+    'https://v3b.fal.media/files/image.png',
     'https://storage.googleapis.com/image.png',
     'https://api.kie.ai/image.png',
     'https://cdn.suno.ai/audio.mp3',

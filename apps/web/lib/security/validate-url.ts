@@ -17,6 +17,7 @@ const ALLOWED_HOST_PATTERNS = [
   /\.googleusercontent\.com$/,
   /\.suno\.ai$/,
   /\.fal\.ai$/,
+  /\.fal\.media$/,
 ]
 
 const BLOCKED_IP_PATTERNS = [
