@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import type { ApiStepResult } from '@/lib/workflow/helpers'
-import { unwrapStepResult } from '@/lib/workflow/helpers'
 import {
   ALLOWED_TEXT_TO_IMAGE_MODELS,
   ALLOWED_IMAGE_TO_IMAGE_MODELS,
@@ -56,6 +55,7 @@ export const MainVisualRequestSchema = z.object({
   }),
   model: z.enum(CHARACTER_T2I_MODELS).optional(),
   count: z.number().int().min(1).max(8).default(4),
+  regenerateIndex: z.number().int().min(0).max(7).optional(),
 })
 export type MainVisualRequest = z.infer<typeof MainVisualRequestSchema>
 
@@ -68,6 +68,7 @@ export const CharacterSheetRequestSchema = z.object({
     visualDescription: z.string().max(2000),
   }),
   model: z.enum(CHARACTER_I2I_MODELS).optional(),
+  regenerateVariationId: z.string().optional(),
 })
 export type CharacterSheetRequest = z.infer<typeof CharacterSheetRequestSchema>
 
@@ -90,7 +91,7 @@ export interface QuickstartResponse {
 
 export interface MainVisualResponse {
   sessionId: string
-  images: Array<{ id: string; url: string; prompt: string }>
+  images: Array<{ id: string; url: string; prompt: string; status?: 'completed' | 'failed' }>
 }
 
 export interface CharacterSheetResponse {
@@ -98,7 +99,7 @@ export interface CharacterSheetResponse {
   selectedImageUrl: string
   characterName: string
   characterDescription: string
-  sheets: Array<{ id: string; url: string; variation: string }>
+  sheets: Array<{ id: string; url: string; variation: string; status?: 'completed' | 'failed' }>
 }
 
 // ============================================================

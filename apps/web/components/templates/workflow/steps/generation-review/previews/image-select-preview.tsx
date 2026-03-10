@@ -2,17 +2,19 @@
 
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { Check, Download } from 'lucide-react'
+import { Check, Download, RotateCcw, Loader2, AlertTriangle } from 'lucide-react'
 import { unwrapApiData } from '@/lib/workflow/helpers'
 
 interface ImageSelectPreviewProps {
   data: unknown
   onEdit?: (data: unknown) => void
   onDownloadItem?: (id: string, url: string) => void
+  onRegenerateItem?: (id: string) => void
+  regeneratingItemId?: string | null
 }
 
 interface ImageSelectData {
-  images?: Array<{ id: string; url: string; prompt?: string }>
+  images?: Array<{ id: string; url: string; prompt?: string; status?: 'completed' | 'failed' }>
   selectedImageId?: string
   selectedImageUrl?: string
 }
@@ -21,6 +23,8 @@ export function ImageSelectPreview({
   data,
   onEdit,
   onDownloadItem,
+  onRegenerateItem,
+  regeneratingItemId,
 }: ImageSelectPreviewProps) {
   const response = unwrapApiData<ImageSelectData>(data)
   const images = response?.images || []
@@ -36,18 +40,21 @@ export function ImageSelectPreview({
 
   const handleSelect = (imageId: string) => {
     if (!onEdit) return
-    const selectedImage = images.find((img) => img.id === imageId)
+    // 실패 항목 선택 차단
+    const image = images.find((img) => img.id === imageId)
+    if (!image?.url) return
+
     onEdit({
       ...response,
       selectedImageId: imageId,
-      selectedImageUrl: selectedImage?.url || '',
+      selectedImageUrl: image.url,
     })
   }
 
   return (
     <div className="w-full space-y-3">
       <span className="text-sm font-medium text-white/60">
-        이미지를 선택하세요 ({images.length}개)
+        이미지를 선택하세요 ({images.filter((img) => img.url).length}개)
       </span>
 
       <div
@@ -57,62 +64,106 @@ export function ImageSelectPreview({
       >
         {images.map((image) => {
           const isSelected = selectedId === image.id
+          const isFailed = image.status === 'failed' || !image.url
+          const isRegenerating = regeneratingItemId === image.id
           return (
             <div
               key={image.id}
               role="radio"
               aria-checked={isSelected}
+              aria-disabled={isFailed}
               aria-label={`초상화 ${image.id}`}
-              tabIndex={0}
-              onClick={() => handleSelect(image.id)}
+              tabIndex={isFailed ? -1 : 0}
+              onClick={() => !isFailed && handleSelect(image.id)}
               onKeyDown={(e) => {
-                if (e.key === ' ' || e.key === 'Enter') {
+                if ((e.key === ' ' || e.key === 'Enter') && !isFailed) {
                   e.preventDefault()
                   handleSelect(image.id)
                 }
               }}
               className={cn(
-                'group relative aspect-square cursor-pointer overflow-hidden rounded-xl border-2 transition-all',
+                'group relative aspect-square overflow-hidden rounded-xl border-2 transition-all',
                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-neon-cyan)]',
-                isSelected
-                  ? 'border-[var(--color-neon-cyan)] ring-2 ring-[var(--color-neon-cyan)]/30'
-                  : 'border-white/20 hover:border-white/40'
+                isFailed
+                  ? 'cursor-not-allowed border-red-500/40 opacity-70'
+                  : isSelected
+                    ? 'cursor-pointer border-[var(--color-neon-cyan)] ring-2 ring-[var(--color-neon-cyan)]/30'
+                    : 'cursor-pointer border-white/20 hover:border-white/40'
               )}
             >
-              {image.url ? (
+              {image.url && !isFailed ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={image.url}
                   alt={`초상화 ${image.id}`}
-                  className="h-full w-full object-cover"
+                  className={cn(
+                    'h-full w-full object-cover transition-opacity',
+                    isRegenerating && 'opacity-40'
+                  )}
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-white/5">
-                  <span className="text-sm text-white/40">로딩 중...</span>
+                <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-white/5">
+                  <AlertTriangle className="h-6 w-6 text-red-400/60" />
+                  <span className="text-xs text-red-400/80">생성 실패</span>
+                  {onRegenerateItem && !isRegenerating && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onRegenerateItem(image.id)
+                      }}
+                      className="mt-1 rounded-full bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/20"
+                    >
+                      <RotateCcw className="mr-1 inline h-3 w-3" />
+                      재생성
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* 재생성 로딩 오버레이 */}
+              {isRegenerating && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30">
+                  <Loader2 className="h-6 w-6 animate-spin text-[var(--color-neon-cyan)]" />
+                  <span className="text-xs text-white/80">재생성 중...</span>
                 </div>
               )}
 
               {/* Selected indicator */}
-              {isSelected && (
+              {isSelected && !isFailed && (
                 <div className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--color-neon-cyan)]">
                   <Check className="h-4 w-4 text-black" />
                 </div>
               )}
 
-              {/* Download button on hover */}
-              {image.url && onDownloadItem && (
-                <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDownloadItem(image.id, image.url)
-                    }}
-                    className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
-                    aria-label={`초상화 ${image.id} 다운로드`}
-                    title="다운로드"
-                  >
-                    <Download className="h-3 w-3 text-white" />
-                  </button>
+              {/* Action buttons on hover */}
+              {image.url && !isRegenerating && (
+                <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  {onRegenerateItem && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onRegenerateItem(image.id)
+                      }}
+                      className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
+                      aria-label={`초상화 ${image.id} 재생성`}
+                      title="재생성"
+                    >
+                      <RotateCcw className="h-3 w-3 text-white" />
+                    </button>
+                  )}
+                  {onDownloadItem && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDownloadItem(image.id, image.url)
+                      }}
+                      className="rounded-full bg-black/60 p-1.5 hover:bg-black/80"
+                      aria-label={`초상화 ${image.id} 다운로드`}
+                      title="다운로드"
+                    >
+                      <Download className="h-3 w-3 text-white" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>

@@ -1076,7 +1076,7 @@ export const TEMPLATES: Template[] = [
       '아키타입을 선택하거나 자유롭게 설명하면 AI가 캐릭터 프로필을 생성합니다. 초상화 4장 중 마음에 드는 것을 선택하고, 다양한 포즈와 표정의 캐릭터 시트를 완성하세요.',
     views: '45K',
     video: '/templates/character-creator.mp4',
-    poster: '/templates/character-creator.jpg',
+    poster: '/templates/character-creator.svg',
     badge: 'NEW',
     category: 'character',
     tags: ['character', 'design', 'portrait', 'illustration'],

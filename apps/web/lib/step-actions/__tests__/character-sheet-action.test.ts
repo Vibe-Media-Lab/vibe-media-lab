@@ -147,8 +147,8 @@ describe('characterSheetAction', () => {
           characterName: '아라곤',
           characterDescription: 'A brave warrior',
           sheets: [
-            { id: 'front_view', url: 'https://example.com/front.png', variation: '정면' },
-            { id: 'three_quarter', url: 'https://example.com/3q.png', variation: '3/4 뷰' },
+            { id: 'front_view', url: 'https://example.com/front.png', variation: '정면', status: 'completed' },
+            { id: 'three_quarter', url: 'https://example.com/3q.png', variation: '3/4 뷰', status: 'completed' },
           ],
         },
       }
@@ -198,16 +198,191 @@ describe('characterSheetAction', () => {
       await action.execute(mockContext(), callbacks)
 
       expect(callbacks.setProgress).toHaveBeenCalled()
-      const progressCall = (callbacks.setProgress as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Function
+      const progressCall = (callbacks.setProgress as ReturnType<typeof vi.fn>).mock.calls[0]![0] as (prev: Record<string, unknown>) => Record<string, unknown>
       const result = progressCall({ items: [], current: 0, total: 0, message: '', stepId: 'character-sheet', status: 'idle' })
       expect(result.total).toBe(4)
       expect(result.items).toHaveLength(4)
     })
+
+    it('updates progress with item statuses after API response', async () => {
+      const sheetData = {
+        success: true,
+        data: {
+          sessionId: 'test-session',
+          selectedImageUrl: 'https://example.com/1.png',
+          characterName: '아라곤',
+          characterDescription: 'A brave warrior',
+          sheets: [
+            { id: 'front_view', url: 'https://example.com/front.png', variation: '정면', status: 'completed' },
+            { id: 'three_quarter', url: '', variation: '3/4 뷰', status: 'failed' },
+            { id: 'happy_expression', url: 'https://example.com/happy.png', variation: '행복 표정', status: 'completed' },
+            { id: 'action_pose', url: 'https://example.com/action.png', variation: '액션 포즈', status: 'completed' },
+          ],
+        },
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => sheetData,
+      })
+
+      const callbacks = mockCallbacks()
+      await action.execute(mockContext(), callbacks)
+
+      // setProgress: 초기화 + 상태 반영
+      expect(callbacks.setProgress).toHaveBeenCalledTimes(2)
+
+      const statusCall = (callbacks.setProgress as ReturnType<typeof vi.fn>).mock.calls[1]![0] as (prev: Record<string, unknown>) => Record<string, unknown>
+      const result = statusCall({
+        items: [
+          { id: 'front_view', label: '정면', status: 'processing' },
+          { id: 'three_quarter', label: '3/4 뷰', status: 'processing' },
+          { id: 'happy_expression', label: '행복 표정', status: 'processing' },
+          { id: 'action_pose', label: '액션 포즈', status: 'processing' },
+        ],
+        current: 0,
+        total: 4,
+        message: '',
+        stepId: 'character-sheet',
+        status: 'idle',
+      })
+
+      expect(result.current).toBe(3)
+      const items = result.items as Array<{ status: string }>
+      expect(items[1]!.status).toBe('failed')
+    })
   })
 
   describe('regenerateItem', () => {
-    it('is not defined', () => {
-      expect(action.regenerateItem).toBeUndefined()
+    it('is defined', () => {
+      expect(action.regenerateItem).toBeDefined()
+    })
+
+    it('sends regenerateVariationId to API and updates single sheet', async () => {
+      const newSheet = { id: 'three_quarter', url: 'https://example.com/new-3q.png', variation: '3/4 뷰', status: 'completed' }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            sessionId: 'test-session',
+            selectedImageUrl: 'https://example.com/1.png',
+            characterName: '아라곤',
+            characterDescription: 'A brave warrior',
+            sheets: [newSheet],
+          },
+        }),
+      })
+
+      const ctx = mockContext({
+        value: {
+          data: {
+            success: true,
+            data: {
+              sessionId: 'test-session',
+              selectedImageUrl: 'https://example.com/1.png',
+              characterName: '아라곤',
+              characterDescription: 'A brave warrior',
+              sheets: [
+                { id: 'front_view', url: 'https://example.com/front.png', variation: '정면' },
+                { id: 'three_quarter', url: 'https://example.com/old-3q.png', variation: '3/4 뷰' },
+              ],
+            },
+          },
+          generatedAt: new Date(),
+        },
+      })
+
+      const setRegeneratingItemId = vi.fn()
+      const callbacks = { ...mockCallbacks(), setRegeneratingItemId }
+
+      await action.regenerateItem!('three_quarter', undefined, ctx, callbacks)
+
+      // API call includes regenerateVariationId
+      const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string)
+      expect(callBody.regenerateVariationId).toBe('three_quarter')
+
+      // onChange called with updated sheet
+      expect(callbacks.onChange).toHaveBeenCalledOnce()
+      const updatedData = (callbacks.onChange as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+      const innerData = updatedData.data.data
+      expect(innerData.sheets[1].url).toBe('https://example.com/new-3q.png')
+      // front_view unchanged
+      expect(innerData.sheets[0].url).toBe('https://example.com/front.png')
+
+      expect(setRegeneratingItemId).toHaveBeenCalledWith(null)
+    })
+
+    it('handles edited data format (after handleEdit)', async () => {
+      const newSheet = { id: 'front_view', url: 'https://example.com/new-front.png', variation: '정면', status: 'completed' }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            sessionId: 'test-session',
+            selectedImageUrl: 'https://example.com/1.png',
+            characterName: '아라곤',
+            characterDescription: 'A brave warrior',
+            sheets: [newSheet],
+          },
+        }),
+      })
+
+      // After unwrap: sheets are at data.sheets (not data.data.sheets)
+      const ctx = mockContext({
+        value: {
+          data: {
+            sheets: [
+              { id: 'front_view', url: 'https://example.com/old-front.png', variation: '정면' },
+              { id: 'three_quarter', url: 'https://example.com/3q.png', variation: '3/4 뷰' },
+            ],
+            selectedImageUrl: 'https://example.com/1.png',
+          },
+          generatedAt: new Date(),
+        },
+      })
+
+      const setRegeneratingItemId = vi.fn()
+      const callbacks = { ...mockCallbacks(), setRegeneratingItemId }
+
+      await action.regenerateItem!('front_view', undefined, ctx, callbacks)
+
+      const updatedData = (callbacks.onChange as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+      expect(updatedData.data.sheets[0].url).toBe('https://example.com/new-front.png')
+      expect(updatedData.data.sheets[1].url).toBe('https://example.com/3q.png')
+    })
+
+    it('throws when API returns no sheet', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            sessionId: 'test-session',
+            selectedImageUrl: 'https://example.com/1.png',
+            characterName: '아라곤',
+            characterDescription: 'A brave warrior',
+            sheets: [],
+          },
+        }),
+      })
+
+      const ctx = mockContext({
+        value: {
+          data: { success: true, data: { sheets: [] } },
+          generatedAt: new Date(),
+        },
+      })
+
+      const setRegeneratingItemId = vi.fn()
+      const callbacks = { ...mockCallbacks(), setRegeneratingItemId }
+
+      await expect(
+        action.regenerateItem!('front_view', undefined, ctx, callbacks)
+      ).rejects.toThrow('재생성된 시트가 없습니다')
     })
   })
 })

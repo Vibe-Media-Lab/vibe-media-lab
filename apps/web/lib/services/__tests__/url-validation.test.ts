@@ -117,6 +117,14 @@ vi.mock('@/lib/utils/fetch-with-timeout', () => ({
   fetchWithTimeout: vi.fn(),
 }))
 
+vi.mock('@/lib/security/validate-url', () => ({
+  validateFetchUrl: vi.fn(),
+}))
+
+vi.mock('@/lib/security/security-logger', () => ({
+  logSecurityEvent: vi.fn(),
+}))
+
 vi.mock('@/lib/utils/retry-with-backoff', () => ({
   retryWithBackoff: vi.fn((fn: () => unknown) => fn()),
 }))
@@ -150,14 +158,20 @@ describe('image-service: kieai URL validation', () => {
     expect(result.error).toContain('nano-banana-pro')
   })
 
-  it('extracts URL from JSON string resultJson', async () => {
+  it('extracts URL from JSON string resultJson and persists to Supabase', async () => {
     mockCreateTask.mockResolvedValue('task-img-2')
     mockWaitForTask.mockResolvedValue({
       state: 'success',
       resultJson: JSON.stringify({ url: 'https://example.com/image.png' }),
     })
 
-    // image-service imports saveImage which we need to mock properly
+    // persistTempUrl: fetchWithTimeout → buffer → saveImage
+    const { fetchWithTimeout } = await import('@/lib/utils/fetch-with-timeout')
+    vi.mocked(fetchWithTimeout).mockResolvedValue({
+      arrayBuffer: async () => new ArrayBuffer(8),
+      headers: new Headers({ 'content-type': 'image/png' }),
+    } as unknown as Response)
+
     const { saveImage } = await import('../image-storage')
     vi.mocked(saveImage).mockResolvedValue({ success: true, url: 'https://stored.example.com/image.png' })
 
@@ -168,7 +182,7 @@ describe('image-service: kieai URL validation', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.url).toBe('https://example.com/image.png')
+    expect(result.url).toBe('https://stored.example.com/image.png')
   })
 })
 

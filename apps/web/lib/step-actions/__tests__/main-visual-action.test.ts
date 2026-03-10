@@ -104,8 +104,8 @@ describe('mainVisualAction', () => {
         data: {
           sessionId: 'test-session',
           images: [
-            { id: 'portrait-1', url: 'https://example.com/1.png', prompt: 'test' },
-            { id: 'portrait-2', url: 'https://example.com/2.png', prompt: 'test' },
+            { id: 'portrait-1', url: 'https://example.com/1.png', prompt: 'test', status: 'completed' },
+            { id: 'portrait-2', url: 'https://example.com/2.png', prompt: 'test', status: 'completed' },
           ],
         },
       }
@@ -136,10 +136,56 @@ describe('mainVisualAction', () => {
       await action.execute(mockContext(), callbacks)
 
       expect(callbacks.setProgress).toHaveBeenCalled()
-      const progressCall = (callbacks.setProgress as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Function
+      const progressCall = (callbacks.setProgress as ReturnType<typeof vi.fn>).mock.calls[0]![0] as (prev: Record<string, unknown>) => Record<string, unknown>
       const result = progressCall({ items: [], current: 0, total: 0, message: '', stepId: 'main-visual', status: 'idle' })
       expect(result.total).toBe(4)
       expect(result.items).toHaveLength(4)
+    })
+
+    it('updates progress with item statuses after API response', async () => {
+      const imageData = {
+        success: true,
+        data: {
+          sessionId: 'test-session',
+          images: [
+            { id: 'portrait-1', url: 'https://example.com/1.png', prompt: 'test', status: 'completed' },
+            { id: 'portrait-2', url: '', prompt: 'test', status: 'failed' },
+            { id: 'portrait-3', url: 'https://example.com/3.png', prompt: 'test', status: 'completed' },
+            { id: 'portrait-4', url: 'https://example.com/4.png', prompt: 'test', status: 'completed' },
+          ],
+        },
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => imageData,
+      })
+
+      const callbacks = mockCallbacks()
+      await action.execute(mockContext(), callbacks)
+
+      // setProgress는 2번 호출됨: 초기화 + 상태 반영
+      expect(callbacks.setProgress).toHaveBeenCalledTimes(2)
+
+      const statusCall = (callbacks.setProgress as ReturnType<typeof vi.fn>).mock.calls[1]![0] as (prev: Record<string, unknown>) => Record<string, unknown>
+      const result = statusCall({
+        items: [
+          { id: 'portrait-1', label: '초상화 #1', status: 'processing' },
+          { id: 'portrait-2', label: '초상화 #2', status: 'processing' },
+          { id: 'portrait-3', label: '초상화 #3', status: 'processing' },
+          { id: 'portrait-4', label: '초상화 #4', status: 'processing' },
+        ],
+        current: 0,
+        total: 4,
+        message: '',
+        stepId: 'main-visual',
+        status: 'idle',
+      })
+
+      expect(result.current).toBe(3)
+      const items = result.items as Array<{ status: string }>
+      expect(items[0]!.status).toBe('completed')
+      expect(items[1]!.status).toBe('failed')
     })
 
     it('throws on API error', async () => {
@@ -155,8 +201,116 @@ describe('mainVisualAction', () => {
   })
 
   describe('regenerateItem', () => {
-    it('is not defined', () => {
-      expect(action.regenerateItem).toBeUndefined()
+    it('is defined', () => {
+      expect(action.regenerateItem).toBeDefined()
+    })
+
+    it('sends regenerateIndex to API and updates single image', async () => {
+      const newImage = { id: 'portrait-2', url: 'https://example.com/new-2.png', prompt: 'test', status: 'completed' }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: { sessionId: 'test-session', images: [newImage] },
+        }),
+      })
+
+      const ctx = mockContext({
+        value: {
+          data: {
+            success: true,
+            data: {
+              sessionId: 'test-session',
+              images: [
+                { id: 'portrait-1', url: 'https://example.com/1.png' },
+                { id: 'portrait-2', url: 'https://example.com/old-2.png' },
+              ],
+            },
+          },
+          generatedAt: new Date(),
+        },
+      })
+
+      const setRegeneratingItemId = vi.fn()
+      const callbacks = { ...mockCallbacks(), setRegeneratingItemId }
+
+      await action.regenerateItem!('portrait-2', undefined, ctx, callbacks)
+
+      // API call includes regenerateIndex, count stays at original batchSize
+      const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string)
+      expect(callBody.regenerateIndex).toBe(1)
+      expect(callBody.count).toBe(4)
+
+      // onChange called with updated image
+      expect(callbacks.onChange).toHaveBeenCalledOnce()
+      const updatedData = (callbacks.onChange as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+      const innerData = updatedData.data.data
+      expect(innerData.images[1].url).toBe('https://example.com/new-2.png')
+      // portrait-1 unchanged
+      expect(innerData.images[0].url).toBe('https://example.com/1.png')
+
+      expect(setRegeneratingItemId).toHaveBeenCalledWith(null)
+    })
+
+    it('handles edited data format (after handleEdit)', async () => {
+      const newImage = { id: 'portrait-1', url: 'https://example.com/new-1.png', prompt: 'test', status: 'completed' }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: { sessionId: 'test-session', images: [newImage] },
+        }),
+      })
+
+      // After handleEdit: images are at data.images (not data.data.images)
+      const ctx = mockContext({
+        value: {
+          data: {
+            images: [
+              { id: 'portrait-1', url: 'https://example.com/old-1.png' },
+              { id: 'portrait-2', url: 'https://example.com/2.png' },
+            ],
+            selectedImageId: 'portrait-1',
+            selectedImageUrl: 'https://example.com/old-1.png',
+          },
+          generatedAt: new Date(),
+        },
+      })
+
+      const setRegeneratingItemId = vi.fn()
+      const callbacks = { ...mockCallbacks(), setRegeneratingItemId }
+
+      await action.regenerateItem!('portrait-1', undefined, ctx, callbacks)
+
+      const updatedData = (callbacks.onChange as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+      expect(updatedData.data.images[0].url).toBe('https://example.com/new-1.png')
+      expect(updatedData.data.images[1].url).toBe('https://example.com/2.png')
+    })
+
+    it('throws when API returns no image', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: { sessionId: 'test-session', images: [] },
+        }),
+      })
+
+      const ctx = mockContext({
+        value: {
+          data: { success: true, data: { images: [] } },
+          generatedAt: new Date(),
+        },
+      })
+
+      const setRegeneratingItemId = vi.fn()
+      const callbacks = { ...mockCallbacks(), setRegeneratingItemId }
+
+      await expect(
+        action.regenerateItem!('portrait-1', undefined, ctx, callbacks)
+      ).rejects.toThrow('재생성된 이미지가 없습니다')
     })
   })
 })

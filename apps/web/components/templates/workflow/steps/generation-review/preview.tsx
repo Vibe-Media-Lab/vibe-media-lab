@@ -200,6 +200,8 @@ export function Preview({
           data={data}
           onEdit={onEdit}
           onDownloadItem={onDownloadItem}
+          onRegenerateItem={onRegenerateItem}
+          regeneratingItemId={regeneratingItemId}
         />
       )
     case 'character-profile':
@@ -207,6 +209,8 @@ export function Preview({
         <CharacterProfilePreview
           data={data}
           onDownloadItem={onDownloadItem}
+          onRegenerateItem={onRegenerateItem}
+          regeneratingItemId={regeneratingItemId}
         />
       )
     default:

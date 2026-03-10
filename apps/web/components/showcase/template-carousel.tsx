@@ -79,6 +79,15 @@ const TEMPLATES: Template[] = [
     badge: 'NEW',
   },
   {
+    id: 'character-creator',
+    title: 'Character Creator',
+    description: 'AI로 나만의 캐릭터를 디자인하세요',
+    views: '45K',
+    video: '/templates/character-creator.mp4',
+    poster: '/templates/character-creator.svg',
+    badge: 'NEW',
+  },
+  {
     id: 'brainrot',
     title: 'Brainrot Core',
     description: '서브웨이 서퍼 + 밈 편집의 정석',

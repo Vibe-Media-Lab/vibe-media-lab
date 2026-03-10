@@ -39,6 +39,7 @@ import type { RouteResult } from '@/lib/models/router'
 import { saveImage } from './image-storage'
 import { saveToLibrary } from './library-saver'
 import { fetchWithTimeout } from '@/lib/utils/fetch-with-timeout'
+import { validateFetchUrl } from '@/lib/security/validate-url'
 import * as Sentry from '@sentry/nextjs'
 import { getLogger } from '@/lib/logger'
 import type { GeminiAspectRatio, GeminiImageSize } from './gemini-image-client'
@@ -51,6 +52,27 @@ import type {
 } from './types'
 
 const logger = getLogger('image-service')
+
+/**
+ * 임시 CDN URL → Supabase Storage 영속화
+ * fal/kieai의 임시 URL을 다운로드 → base64 → saveImage 패턴으로 영구 URL 확보.
+ * 저장 실패 시 hard fail (임시 URL fallback 금지).
+ */
+async function persistTempUrl(tempUrl: string, prefix: string): Promise<string> {
+  validateFetchUrl(tempUrl, { endpoint: 'persistTempUrl' })
+  const response = await fetchWithTimeout(tempUrl, { timeoutMs: 45000 })
+  const buffer = Buffer.from(await response.arrayBuffer())
+  const contentType = response.headers.get('content-type') || 'image/png'
+  const saved = await saveImage({
+    base64: buffer.toString('base64'),
+    mimeType: contentType,
+    prefix,
+  })
+  if (!saved.success || !saved.url) {
+    throw new Error(`Image persistence failed: ${saved.error || 'unknown'}`)
+  }
+  return saved.url
+}
 
 function isAnyImageProviderAvailable(): boolean {
   return isFalAvailable() || isKieaiAvailable() || isGeminiImageAvailable()
@@ -100,9 +122,12 @@ async function generateImageViaKieai(
       return { success: false, error }
     }
 
+    // kieai 임시 URL → Supabase Storage 영속화
+    const persistedUrl = await persistTempUrl(url, 'gen')
+
     return {
       success: true,
-      url,
+      url: persistedUrl,
       taskId,
       metadata: {
         prompt: params.prompt,
@@ -188,23 +213,12 @@ async function generateImageViaFal(
       resolution: params.resolution,
     })
 
-    // fal 임시 URL → fetch → buffer → saveImage
-    const response = await fetchWithTimeout(result.url, { timeoutMs: 45000 })
-    const buffer = Buffer.from(await response.arrayBuffer())
-    const contentType = response.headers.get('content-type') || 'image/png'
-    const saved = await saveImage({
-      base64: buffer.toString('base64'),
-      mimeType: contentType,
-      prefix: 'gen',
-    })
-
-    if (!saved.success) {
-      return { success: false, error: saved.error || 'Failed to save image' }
-    }
+    // fal 임시 URL → Supabase Storage 영속화
+    const persistedUrl = await persistTempUrl(result.url, 'gen')
 
     return {
       success: true,
-      url: saved.url,
+      url: persistedUrl,
       metadata: {
         prompt: params.prompt,
         aspectRatio: params.aspectRatio || '16:9',
@@ -243,23 +257,12 @@ async function editImageViaFal(
       resolution: params.resolution,
     })
 
-    // fal 임시 URL → fetch → base64 → saveImage
-    const response = await fetchWithTimeout(result.url, { timeoutMs: 45000 })
-    const buffer = Buffer.from(await response.arrayBuffer())
-    const contentType = response.headers.get('content-type') || 'image/png'
-    const saved = await saveImage({
-      base64: buffer.toString('base64'),
-      mimeType: contentType,
-      prefix: 'edit',
-    })
-
-    if (!saved.success) {
-      return { success: false, error: saved.error || 'Failed to save image' }
-    }
+    // fal 임시 URL → Supabase Storage 영속화
+    const persistedUrl = await persistTempUrl(result.url, 'edit')
 
     return {
       success: true,
-      url: saved.url,
+      url: persistedUrl,
       metadata: {
         prompt: params.prompt,
         referenceCount: params.referenceUrls.length,
@@ -393,9 +396,12 @@ async function editImageWithKieai(
       return { success: false, error }
     }
 
+    // kieai 임시 URL → Supabase Storage 영속화
+    const persistedUrl = await persistTempUrl(url, 'edit')
+
     return {
       success: true,
-      url,
+      url: persistedUrl,
       taskId,
       metadata: {
         prompt: params.prompt,

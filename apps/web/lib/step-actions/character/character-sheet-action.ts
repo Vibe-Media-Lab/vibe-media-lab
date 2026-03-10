@@ -55,10 +55,10 @@ const characterSheetAction: StepAction = {
     }
 
     const variationItems = [
-      { id: 'front', label: '정면', status: 'processing' as const },
+      { id: 'front_view', label: '정면', status: 'processing' as const },
       { id: 'three_quarter', label: '3/4 뷰', status: 'processing' as const },
-      { id: 'happy', label: '행복 표정', status: 'processing' as const },
-      { id: 'action', label: '액션 포즈', status: 'processing' as const },
+      { id: 'happy_expression', label: '행복 표정', status: 'processing' as const },
+      { id: 'action_pose', label: '액션 포즈', status: 'processing' as const },
     ]
 
     callbacks.setProgress((prev) => ({
@@ -70,11 +70,64 @@ const characterSheetAction: StepAction = {
 
     const result = await simpleFetch(this.endpoint, body)
 
+    // 항목별 완료/실패 상태 반영
+    const apiData = (result as Record<string, unknown>).data || result
+    const sheets = (apiData as Record<string, unknown>).sheets as Array<{ id: string; url: string; status?: string }> | undefined
+    if (sheets) {
+      callbacks.setProgress((prev) => ({
+        ...prev,
+        current: sheets.filter((s) => s.status === 'completed').length,
+        items: prev.items?.map((p) => {
+          const sheet = sheets.find((s) => s.id === p.id)
+          return sheet ? { ...p, status: sheet.url ? 'completed' as const : 'failed' as const } : p
+        }),
+      }))
+    }
+
     callbacks.onChange({
       data: result,
       generatedAt: new Date(),
     })
     callbacks.setStatus('reviewing')
+  },
+
+  async regenerateItem(
+    itemId: string,
+    _editedPrompt: string | undefined,
+    ctx: StepActionContext,
+    callbacks: StepCallbacks & { setRegeneratingItemId: (id: string | null) => void },
+  ) {
+    const body = { ...this.buildRequestBody(ctx), regenerateVariationId: itemId }
+
+    const result = await simpleFetch(this.endpoint, body)
+    const apiData = (result as Record<string, unknown>).data || result
+    const newSheet = ((apiData as Record<string, unknown>).sheets as Array<Record<string, unknown>> | undefined)?.[0]
+    if (!newSheet) throw new Error('재생성된 시트가 없습니다')
+
+    // ctx.value.data에서 sheets 배열 찾기 (두 가지 형태 처리)
+    if (ctx.value) {
+      const currentData = ctx.value.data as Record<string, unknown>
+      const innerData = (currentData?.data as Record<string, unknown>) || currentData
+      const currentSheets = (innerData?.sheets as Array<Record<string, unknown>>) || []
+
+      const updatedSheets = currentSheets.map((sheet) =>
+        (sheet as { id?: string }).id === itemId ? { ...sheet, ...newSheet } : sheet
+      )
+
+      if (currentData?.data && (currentData.data as Record<string, unknown>)?.sheets) {
+        callbacks.onChange({
+          ...ctx.value,
+          data: { ...currentData, data: { ...(currentData.data as object), sheets: updatedSheets } },
+        })
+      } else {
+        callbacks.onChange({
+          ...ctx.value,
+          data: { ...currentData, sheets: updatedSheets },
+        })
+      }
+    }
+
+    callbacks.setRegeneratingItemId(null)
   },
 }
 
