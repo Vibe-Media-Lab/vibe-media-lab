@@ -15,7 +15,7 @@ function mockCallbacks(): StepCallbacks {
 function mockContext(overrides?: Partial<StepActionContext>): StepActionContext {
   return {
     inputContext: {
-      archetype: { archetype: 'warrior', freeText: undefined },
+      archetype: { archetype: 'bright-3d-boy', freeText: undefined },
     },
     sessionId: 'test-session',
     projectId: null,
@@ -53,7 +53,7 @@ describe('quickstartAction', () => {
       const ctx = mockContext()
       const body = action.buildRequestBody(ctx)
 
-      expect(body.archetype).toBe('warrior')
+      expect(body.archetype).toBe('bright-3d-boy')
       expect(body.sessionId).toBe('test-session')
     })
 
@@ -88,7 +88,7 @@ describe('quickstartAction', () => {
             personality: '용감한 전사',
             visualDescription: 'A brave warrior',
             backstory: '전사 배경',
-            archetype: 'warrior',
+            archetype: 'bright-3d-boy',
           },
         },
       }

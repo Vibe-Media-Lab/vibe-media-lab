@@ -13,6 +13,7 @@ const ALLOWED_HOST_PATTERNS = [
   /\.supabase\.co$/,
   /^storage\.googleapis\.com$/,
   /\.kie\.ai$/,
+  /(?:^|\.)aiquickdraw\.com$/,
   /\.googleusercontent\.com$/,
   /\.suno\.ai$/,
   /\.fal\.ai$/,

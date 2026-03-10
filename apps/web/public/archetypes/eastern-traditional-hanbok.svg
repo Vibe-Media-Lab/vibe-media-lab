@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C0392B" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#1E8449" stop-opacity="0.2"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" rx="16" fill="url(#bg)"/>
+  <circle cx="100" cy="60" r="20" fill="#F1C40F" opacity="0.4"/>
+  <path d="M80 80 Q100 75 120 80 L125 120 Q100 125 75 120 Z" fill="#C0392B" opacity="0.5"/>
+  <path d="M85 80 Q100 78 115 80 L112 95 Q100 92 88 95 Z" fill="#1E8449" opacity="0.4"/>
+  <circle cx="95" cy="57" r="2.5" fill="#2C3E50"/>
+  <circle cx="105" cy="57" r="2.5" fill="#2C3E50"/>
+  <path d="M97 65 Q100 67 103 65" stroke="#2C3E50" fill="none" stroke-width="1.2" stroke-linecap="round"/>
+  <text x="100" y="150" text-anchor="middle" fill="#fff" font-size="11" font-family="sans-serif" opacity="0.8">Hanbok</text>
+</svg>

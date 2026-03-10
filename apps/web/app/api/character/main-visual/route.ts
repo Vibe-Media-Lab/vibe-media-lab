@@ -34,10 +34,45 @@ export const POST = createApiHandler<MainVisualResponse>(
     const body = await request.json()
     const validated = MainVisualRequestSchema.parse(body)
 
-    const { sessionId, projectId, characterProfile, model, count } = validated
+    const { sessionId, projectId, characterProfile, model, count, regenerateIndex } = validated
     const routeOverrides = buildRouteOverrides('character-creator', 'main-visual', 'text-to-image')
     const prompts = buildPortraitPrompts(characterProfile, count)
 
+    // 단일 항목 재생성 모드
+    if (regenerateIndex !== undefined) {
+      const prompt = prompts[regenerateIndex]
+      if (!prompt) {
+        throw new Error(`유효하지 않은 인덱스: ${regenerateIndex}`)
+      }
+
+      logger.debug('Regenerating single portrait', { regenerateIndex, model })
+
+      const result = await generateImage({
+        prompt,
+        aspectRatio: '1:1',
+        model,
+        routeOverrides,
+        userId: user.id,
+        projectId,
+        sessionId,
+        metadata: {
+          type: 'character-portrait',
+          index: regenerateIndex,
+          regenerate: true,
+        },
+      })
+
+      const image = {
+        id: `portrait-${regenerateIndex + 1}`,
+        url: result.success ? (result.url || '') : '',
+        prompt,
+        status: (result.success && result.url) ? 'completed' as const : 'failed' as const,
+      }
+
+      return { sessionId, images: [image] }
+    }
+
+    // 전체 생성 모드
     logger.debug('Starting portrait generation', {
       count: prompts.length,
       model,
@@ -64,29 +99,32 @@ export const POST = createApiHandler<MainVisualResponse>(
           id: `portrait-${i + 1}`,
           url: result.success ? (result.url || '') : '',
           prompt,
+          status: (result.success && result.url) ? 'completed' as const : 'failed' as const,
         }
       })
     )
 
-    const images = settled
-      .filter((s): s is PromiseFulfilledResult<{ id: string; url: string; prompt: string }> =>
-        s.status === 'fulfilled'
-      )
-      .map((s) => s.value)
-      .filter((img) => img.url.length > 0)
+    const images = settled.map((s, i) =>
+      s.status === 'fulfilled'
+        ? s.value
+        : { id: `portrait-${i + 1}`, url: '', prompt: prompts[i]!, status: 'failed' as const }
+    )
+
+    const successCount = images.filter((img) => img.status === 'completed').length
 
     logger.info('Portrait generation complete', {
       total: prompts.length,
-      success: images.length,
+      success: successCount,
       elapsedMs: Date.now() - startTime,
     })
 
-    if (images.length === 0) {
+    if (successCount === 0) {
       throw new Error('모든 초상화 생성에 실패했습니다. 다시 시도해주세요.')
     }
 
     return { sessionId, images }
-  }
+  },
+  { rateLimit: { maxRequests: 5, windowMs: 60_000 } }
 )
 
 export const maxDuration = 300

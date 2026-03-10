@@ -13,6 +13,33 @@ interface ArchetypeSelectStepProps {
   onChange: (value: unknown) => void
 }
 
+function ArchetypeThumbnail({ url, label, colorHint }: { url: string; label: string; colorHint: string }) {
+  const [failed, setFailed] = React.useState(false)
+
+  if (!url || failed) {
+    return (
+      <div
+        className="flex aspect-square w-full items-center justify-center rounded-lg"
+        style={{ background: `linear-gradient(135deg, ${colorHint}40, ${colorHint}10)` }}
+      >
+        <span className="text-2xl font-bold text-white/60">{label.charAt(0)}</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-white/5">
+      {/* eslint-disable-next-line @next/next/no-img-element -- static SVG placeholder, next/image unnecessary */}
+      <img
+        src={url}
+        alt={label}
+        className="h-full w-full object-cover"
+        onError={() => setFailed(true)}
+      />
+    </div>
+  )
+}
+
 export function ArchetypeSelectStep({
   stepId,
   config,
@@ -27,7 +54,7 @@ export function ArchetypeSelectStep({
   const handleSelect = (archetypeId: string) => {
     onChange({
       archetype: archetypeId,
-      freeText: archetypeId === 'freetext' ? freeText : undefined,
+      freeText: freeText || undefined,
     })
   }
 
@@ -82,29 +109,35 @@ export function ArchetypeSelectStep({
       <div
         role="radiogroup"
         aria-label="캐릭터 아키타입 선택"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
       >
         {CHARACTER_ARCHETYPES.map((archetype, index) => {
           const isSelected = selectedArchetype === archetype.id
+          const colorHint = archetype.preset.colorSuggestions[0] || '#888888'
           return (
             <button
               key={archetype.id}
               role="radio"
               aria-checked={isSelected}
+              aria-label={archetype.label}
               data-archetype-id={archetype.id}
               tabIndex={isSelected || (!selectedArchetype && index === 0) ? 0 : -1}
               onClick={() => handleSelect(archetype.id)}
               onKeyDown={(e) => handleKeyDown(e, index)}
               className={cn(
-                'flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all',
+                'flex flex-col items-center gap-2 rounded-xl border-2 p-3 text-center transition-all',
                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-neon-cyan)]',
                 isSelected
                   ? 'border-[var(--color-neon-cyan)] bg-[var(--color-neon-cyan)]/10 text-white'
                   : 'border-white/20 bg-white/5 text-white/70 hover:border-white/40 hover:bg-white/10'
               )}
             >
-              <span className="text-lg font-semibold">{archetype.label}</span>
-              <span className="text-xs text-white/50">{archetype.description}</span>
+              <ArchetypeThumbnail
+                url={archetype.thumbnailUrl}
+                label={archetype.label}
+                colorHint={colorHint}
+              />
+              <span className="text-sm font-semibold leading-tight">{archetype.label}</span>
             </button>
           )
         })}
