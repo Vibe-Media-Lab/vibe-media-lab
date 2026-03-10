@@ -46,12 +46,11 @@ vi.mock('@/lib/constants/model-options', () => ({
     category: 'llm',
     options: [
       { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
-      { id: 'gemini-3-pro-preview', label: 'Gemini 3 Pro' },
       { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
     ],
     defaultModelId: 'gemini-3-flash-preview',
   },
-  ALLOWED_LLM_MODELS: ['gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-3.1-pro-preview'] as const,
+  ALLOWED_LLM_MODELS: ['gemini-3-flash-preview', 'gemini-3.1-pro-preview'] as const,
 }))
 
 // Mock supabase admin client

@@ -461,12 +461,17 @@ export async function interpretChart(
 
     return result
   } catch (error) {
-    // 1차 실패 → getManualFallback 1회 재시도 (retry 없이)
-    const fallbackId = getManualFallback(route.modelId, 'llm')
+    // 사용자가 모델을 명시 선택한 경우 fallback 없이 실패
+    // (Pro 크레딧으로 Flash 실행 방지)
+    const userExplicitlyChoseModel = !!model
+    const fallbackId = userExplicitlyChoseModel
+      ? null
+      : getManualFallback(route.modelId, 'llm')
+
     if (fallbackId) {
       const fbProvider = resolveProvider(fallbackId)
       if (isProviderAvailable(fbProvider)) {
-        logger.info('LLM falling back', { from: route.modelId, to: fallbackId })
+        logger.info('LLM falling back (default model)', { from: route.modelId, to: fallbackId })
         try {
           const rawText = await callGemini(systemPrompt, userPrompt, maxOutputTokens, fallbackId)
           const rawJson = extractJSON<unknown>(rawText)

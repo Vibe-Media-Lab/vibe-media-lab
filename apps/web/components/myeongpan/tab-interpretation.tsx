@@ -1,7 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { marked } from 'marked'
+import DOMPurify, { type Config } from 'dompurify'
 import type { InterpretationResult } from '@vibe-media-lab/myeongpan-core'
+
+const PURIFY_CONFIG: Config = {
+  ALLOWED_TAGS: ['p', 'strong', 'em', 'ul', 'ol', 'li', 'br', 'h4', 'h5', 'blockquote'],
+  ALLOWED_ATTR: [],
+}
 
 const TOPIC_LABELS: Record<string, string> = {
   personality: '성격/성향',
@@ -51,15 +58,7 @@ export function TabInterpretation({
           </button>
           {openSection === i && (
             <div className="border-t border-white/5 px-4 py-4">
-              {/* section.body는 LLM 생성 텍스트. dangerouslySetInnerHTML이나
-                  markdown 렌더러 사용 시 반드시 DOMPurify 등으로 sanitize 필요. */}
-              <div className="prose prose-invert prose-sm max-w-none text-white/80">
-                {section.body.split('\n').map((line, li) => (
-                  <p key={li} className="mb-2 last:mb-0">
-                    {line}
-                  </p>
-                ))}
-              </div>
+              <SanitizedMarkdown body={section.body} />
               {section.crossReferences.length > 0 && (
                 <div className="mt-3 border-t border-white/5 pt-3">
                   <h5 className="mb-1 text-[10px] text-white/40">교차 분석</h5>
@@ -88,7 +87,7 @@ export function TabInterpretation({
               <ul className="space-y-1">
                 {interpretation.crossSystemAnalysis.consensus.map((c, i) => (
                   <li key={i} className="text-xs text-white/60">
-                    &bull; {c}
+                    <SanitizedMarkdown body={c} />
                   </li>
                 ))}
               </ul>
@@ -101,7 +100,7 @@ export function TabInterpretation({
               <ul className="space-y-1">
                 {interpretation.crossSystemAnalysis.contrasts.map((c, i) => (
                   <li key={i} className="text-xs text-white/60">
-                    &bull; {c}
+                    <SanitizedMarkdown body={c} />
                   </li>
                 ))}
               </ul>
@@ -111,13 +110,25 @@ export function TabInterpretation({
           {interpretation.crossSystemAnalysis.synthesis && (
             <div>
               <h5 className="mb-1 text-xs text-white/40">종합</h5>
-              <p className="text-sm leading-relaxed text-white/70">
-                {interpretation.crossSystemAnalysis.synthesis}
-              </p>
+              <SanitizedMarkdown body={interpretation.crossSystemAnalysis.synthesis} />
             </div>
           )}
         </div>
       )}
     </div>
+  )
+}
+
+function SanitizedMarkdown({ body }: { body: string }) {
+  const html = useMemo(() => {
+    const raw = marked.parse(body, { async: false }) as string
+    return DOMPurify.sanitize(raw, PURIFY_CONFIG)
+  }, [body])
+
+  return (
+    <div
+      className="prose prose-invert prose-sm max-w-none text-white/80"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   )
 }

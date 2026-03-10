@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createApiHandler, errorJsonResponse } from '@/lib/api/api-handler'
 import { ApiError } from '@vibe-media-lab/shared'
@@ -9,18 +9,15 @@ import {
 
 const UuidSchema = z.string().uuid()
 
-function extractChartId(request: NextRequest): string | null {
-  const segments = request.nextUrl.pathname.split('/')
-  const chartsIdx = segments.indexOf('charts')
-  const raw = chartsIdx >= 0 ? segments[chartsIdx + 1] : undefined
-  const parsed = UuidSchema.safeParse(raw)
+function validateChartId(params?: Record<string, string>): string | null {
+  const parsed = UuidSchema.safeParse(params?.id)
   return parsed.success ? parsed.data : null
 }
 
 // GET /api/myeongpan/charts/[id]
 export const GET = createApiHandler(
-  async (request: NextRequest, context) => {
-    const id = extractChartId(request)
+  async (_request, context) => {
+    const id = validateChartId(context.params)
     if (!id) {
       return errorJsonResponse(ApiError.badRequest('유효하지 않은 차트 ID입니다'))
     }
@@ -37,8 +34,8 @@ export const GET = createApiHandler(
 
 // DELETE /api/myeongpan/charts/[id]
 export const DELETE = createApiHandler(
-  async (request: NextRequest, context) => {
-    const id = extractChartId(request)
+  async (_request, context) => {
+    const id = validateChartId(context.params)
     if (!id) {
       return errorJsonResponse(ApiError.badRequest('유효하지 않은 차트 ID입니다'))
     }

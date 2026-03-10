@@ -31,7 +31,7 @@ export type {
 } from './types.js'
 
 // Schemas
-export { BirthProfileSchema, UnifiedChartSchema } from './schemas.js'
+export { BirthProfileBaseSchema, BirthProfileSchema, UnifiedChartSchema } from './schemas.js'
 
 // Main calculation
 export { calculateUnifiedChart } from './calculate.js'

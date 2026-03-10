@@ -16,7 +16,10 @@ import { logSecurityEvent } from '@/lib/security/security-logger'
 
 export interface ApiHandlerContext extends RequestContext {
   user: User
+  params?: Record<string, string>
 }
+
+type RouteContext = { params: Promise<Record<string, string>> }
 
 export type ApiHandlerFn<T> = (
   request: NextRequest,
@@ -43,11 +46,11 @@ function getRateLimiter(key: string, config: { maxRequests: number; windowMs: nu
 export function createApiHandler<T>(
   handler: ApiHandlerFn<T>,
   options: CreateApiHandlerOptions = {},
-): (request: NextRequest) => Promise<NextResponse> {
+): (request: NextRequest, routeContext?: RouteContext) => Promise<NextResponse> {
   // requireAuth는 명시적으로 false 전달하지 않는 한 항상 true
   const requireAuth = options.requireAuth !== false
 
-  return async (request: NextRequest) => {
+  return async (request: NextRequest, routeContext?: RouteContext) => {
     const requestContext = await getRequestContext()
     const { requestId } = requestContext
     const endpoint = request.nextUrl.pathname
@@ -60,6 +63,9 @@ export function createApiHandler<T>(
       data: { requestId, endpoint },
       level: 'info',
     })
+
+    // Resolve dynamic route params (Next.js 16 async params)
+    const params = routeContext?.params ? await routeContext.params : undefined
 
     try {
       const supabase = await createClient()
@@ -110,6 +116,7 @@ export function createApiHandler<T>(
         const result = await handler(request, {
           ...requestContext,
           user,
+          params,
         })
 
         if (result instanceof NextResponse) {
@@ -126,6 +133,7 @@ export function createApiHandler<T>(
       const result = await handler(request, {
         ...requestContext,
         user: user!,
+        params,
       })
 
       if (result instanceof NextResponse) {

@@ -27,6 +27,14 @@ describe('InterpretRequestSchema model 필드', () => {
     expect(result.success).toBe(true)
   })
 
+  it('존재하지 않는 모델 거부 (gemini-3-pro-preview)', () => {
+    const result = InterpretRequestSchema.safeParse({
+      ...validBase,
+      model: 'gemini-3-pro-preview',
+    })
+    expect(result.success).toBe(false)
+  })
+
   it('허용되지 않은 모델 거부 (gpt-4o)', () => {
     const result = InterpretRequestSchema.safeParse({
       ...validBase,

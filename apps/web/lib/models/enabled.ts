@@ -164,12 +164,12 @@ export const ENABLED: Record<ModelCapability, EnabledConfig> = {
   'composition': { models: [], featured: [], defaultId: '', recommendedId: '', fallbacks: {} },
 
   'llm': {
-    models: ['gemini-3-flash-preview', 'gemini-3-pro-preview'],
-    featured: ['gemini-3-flash-preview', 'gemini-3-pro-preview'],
+    models: ['gemini-3-flash-preview', 'gemini-3.1-pro-preview'],
+    featured: ['gemini-3-flash-preview', 'gemini-3.1-pro-preview'],
     defaultId: 'gemini-3-flash-preview',
     recommendedId: 'gemini-3-flash-preview',
     fallbacks: {
-      'gemini-3-pro-preview': 'gemini-3-flash-preview',
+      'gemini-3.1-pro-preview': 'gemini-3-flash-preview',
     },
   },
 }

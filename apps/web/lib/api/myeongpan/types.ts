@@ -1,47 +1,41 @@
 /**
  * Myeongpan API 요청 스키마 (Zod)
  *
- * BirthProfileSchema는 core 패키지의 .refine() ESM export 문제를 피하기 위해
- * API 레이어에서 minimal 스키마로 재정의합니다.
+ * 스키마 정의는 core 패키지(@vibe-media-lab/myeongpan-core)가 단일 소스.
+ * API 레이어에서는 isLeapMonth/unknownTime에 기본값(.default)을 추가하고
+ * 동일 refine 검증을 적용합니다.
  */
 
 import { z } from 'zod'
+import { BirthProfileBaseSchema } from '@vibe-media-lab/myeongpan-core'
 import type { UnifiedChart, InterpretationResult } from '@vibe-media-lab/myeongpan-core'
 import { ALLOWED_LLM_MODELS } from '@/lib/constants/model-options'
 
 // ============================================================
-// BirthProfile 스키마 (API용 minimal)
+// BirthProfile 스키마 (API용 — core BaseSchema + default 값)
 // ============================================================
 
-export const BirthProfileRequestSchema = z.object({
-  birthDateTimeLocal: z
-    .string()
-    .regex(
-      /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/,
-      'ISO 로컬 시간 형식이어야 합니다 (예: 1992-10-24T05:30)'
-    ),
-  timezone: z.string().min(1, '시간대를 입력하세요'),
-  location: z.object({
-    lat: z.number().min(-90).max(90),
-    lon: z.number().min(-180).max(180),
-    placeName: z.string().optional(),
-  }),
-  calendarMode: z.enum(['solar', 'lunar']),
-  isLeapMonth: z.boolean().default(false),
-  gender: z.enum(['male', 'female']),
-  unknownTime: z.boolean().default(false),
-  config: z
-    .object({
-      saju: z.object({ useLongitudeCorrection: z.boolean().optional() }).optional(),
-      ziwei: z.object({ fixLeap: z.boolean().optional() }).optional(),
-      western: z
-        .object({
-          houseSystem: z.enum(['placidus', 'koch', 'equal', 'whole-sign']).optional(),
-        })
-        .optional(),
-    })
-    .optional(),
-})
+export const BirthProfileRequestSchema = BirthProfileBaseSchema
+  .extend({
+    isLeapMonth: z.boolean().default(false),
+    unknownTime: z.boolean().default(false),
+  })
+  .refine(
+    (data) => {
+      const [datePart] = data.birthDateTimeLocal.split('T')
+      const [y, m, d] = datePart!.split('-').map(Number)
+      const date = new Date(y!, m! - 1, d!)
+      return date.getFullYear() === y && date.getMonth() === m! - 1 && date.getDate() === d
+    },
+    { message: '실존하지 않는 날짜입니다', path: ['birthDateTimeLocal'] },
+  )
+  .refine(
+    (data) => {
+      const year = parseInt(data.birthDateTimeLocal.substring(0, 4), 10)
+      return year >= 1900 && year <= 2050
+    },
+    { message: '연도는 1900~2050 범위만 지원합니다', path: ['birthDateTimeLocal'] },
+  )
 
 // ============================================================
 // Calculate 요청

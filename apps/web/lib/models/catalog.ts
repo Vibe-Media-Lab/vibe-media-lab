@@ -513,14 +513,6 @@ export const MODEL_CATALOG: CatalogModel[] = [
     meta: { quality: 'high', speed: 'fast', cost: 'low', badge: '추천', priceNote: '$0.50/1M입력' },
   },
   {
-    id: 'gemini-3-pro-preview',
-    label: 'Gemini 3 Pro',
-    provider: 'gemini',
-    capabilities: ['llm'],
-    description: '최고급 추론, 심층 분석',
-    meta: { quality: 'high', speed: 'standard', cost: 'high', priceNote: '$2.00/1M입력' },
-  },
-  {
     id: 'gemini-3.1-pro-preview',
     label: 'Gemini 3.1 Pro',
     provider: 'gemini',

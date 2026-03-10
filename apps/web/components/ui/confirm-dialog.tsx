@@ -20,7 +20,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string
   cancelLabel?: string
   variant?: 'default' | 'destructive'
-  onConfirm: () => void
+  onConfirm: () => void | Promise<void>
   isLoading?: boolean
 }
 

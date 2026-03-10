@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useMyeongpanStore } from '@/lib/stores/myeongpan-store'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 const SYSTEM_LABELS: Record<string, string> = {
   saju: '사주',
@@ -12,6 +13,8 @@ const SYSTEM_LABELS: Record<string, string> = {
 export function SavedChartsList() {
   const { savedCharts, loadSavedCharts, loadChart, deleteChart } = useMyeongpanStore()
   const [isOpen, setIsOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     loadSavedCharts()
@@ -71,9 +74,7 @@ export function SavedChartsList() {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  if (window.confirm('이 명판을 삭제하시겠습니까?')) {
-                    deleteChart(chart.id)
-                  }
+                  setPendingDeleteId(chart.id)
                 }}
                 className="ml-3 text-xs text-white/30 hover:text-red-400"
                 aria-label="삭제"
@@ -84,6 +85,28 @@ export function SavedChartsList() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null)
+        }}
+        title="명판 삭제"
+        description="이 명판을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다."
+        confirmLabel="삭제"
+        variant="destructive"
+        isLoading={isDeleting}
+        onConfirm={async () => {
+          if (!pendingDeleteId) return
+          setIsDeleting(true)
+          try {
+            await deleteChart(pendingDeleteId)
+          } finally {
+            setIsDeleting(false)
+            setPendingDeleteId(null)
+          }
+        }}
+      />
     </div>
   )
 }

@@ -23,32 +23,33 @@ export const WesternConfigSchema = z.object({
 // BirthProfile 입력 스키마
 // ============================================================
 
-export const BirthProfileSchema = z
-  .object({
-    birthDateTimeLocal: z
-      .string()
-      .regex(
-        /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/,
-        'ISO 로컬 시간 형식이어야 합니다 (예: 1992-10-24T05:30)',
-      ),
-    timezone: z.string().min(1, '시간대를 입력하세요'),
-    location: z.object({
-      lat: z.number().min(-90).max(90),
-      lon: z.number().min(-180).max(180),
-      placeName: z.string().optional(),
-    }),
-    calendarMode: z.enum(['solar', 'lunar']),
-    isLeapMonth: z.boolean(),
-    gender: z.enum(['male', 'female']),
-    unknownTime: z.boolean(),
-    config: z
-      .object({
-        saju: SajuConfigSchema.optional(),
-        ziwei: ZiweiConfigSchema.optional(),
-        western: WesternConfigSchema.optional(),
-      })
-      .optional(),
-  })
+export const BirthProfileBaseSchema = z.object({
+  birthDateTimeLocal: z
+    .string()
+    .regex(
+      /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/,
+      'ISO 로컬 시간 형식이어야 합니다 (예: 1992-10-24T05:30)',
+    ),
+  timezone: z.string().min(1, '시간대를 입력하세요'),
+  location: z.object({
+    lat: z.number().min(-90).max(90),
+    lon: z.number().min(-180).max(180),
+    placeName: z.string().optional(),
+  }),
+  calendarMode: z.enum(['solar', 'lunar']),
+  isLeapMonth: z.boolean(),
+  gender: z.enum(['male', 'female']),
+  unknownTime: z.boolean(),
+  config: z
+    .object({
+      saju: SajuConfigSchema.optional(),
+      ziwei: ZiweiConfigSchema.optional(),
+      western: WesternConfigSchema.optional(),
+    })
+    .optional(),
+})
+
+export const BirthProfileSchema = BirthProfileBaseSchema
   .refine(
     (data) => {
       // 실존 날짜 검증
