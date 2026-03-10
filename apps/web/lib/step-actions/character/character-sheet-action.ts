@@ -17,12 +17,13 @@ const characterSheetAction: StepAction = {
     const base = buildCharacterBaseRequest(ctx)
     const charCtx = asCharacterContext(ctx.inputContext)
 
-    // main-visual에서 선택된 이미지 URL 추출
+    // main-visual에서 선택된 이미지 URL + description 스냅샷 추출
     const mainVisualData = unwrapStepResult(charCtx['main-visual'])
     const mainVisualResult = unwrapApiData<{
       images?: Array<{ id: string; url: string }>
       selectedImageId?: string
       selectedImageUrl?: string
+      selectedVisualDescription?: string
     }>(mainVisualData)
 
     let selectedImageUrl = mainVisualResult?.selectedImageUrl || ''
@@ -35,12 +36,17 @@ const characterSheetAction: StepAction = {
     const quickstartData = unwrapStepResult(charCtx.quickstart)
     const quickstartResult = unwrapApiData<{ profile?: { name: string; visualDescription: string } }>(quickstartData)
 
+    // selectedVisualDescription 스냅샷 우선, fallback: quickstart 단수
+    const visualDescription =
+      mainVisualResult?.selectedVisualDescription ||
+      quickstartResult?.profile?.visualDescription || ''
+
     return {
       ...base,
       selectedImageUrl,
       characterProfile: {
         name: quickstartResult?.profile?.name || '',
-        visualDescription: quickstartResult?.profile?.visualDescription || '',
+        visualDescription,
       },
       ...(ctx.selectedModel && { model: ctx.selectedModel }),
     }

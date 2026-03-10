@@ -1112,7 +1112,7 @@ export const TEMPLATES: Template[] = [
           id: 'main-visual',
           type: 'generation-review',
           label: '초상화 생성',
-          description: '프로필 기반으로 4장의 초상화를 생성합니다. 1장을 선택하세요.',
+          description: '4가지 디자인의 초상화를 생성합니다. 마음에 드는 디자인을 선택하세요.',
           required: true,
           config: {
             generateAction: 'character/main-visual',

@@ -17,15 +17,19 @@ const mainVisualAction: StepAction = {
     const base = buildCharacterBaseRequest(ctx)
     const charCtx = asCharacterContext(ctx.inputContext)
     const quickstartData = unwrapStepResult(charCtx.quickstart)
-    const profile = unwrapApiData<{ profile?: { name: string; personality: string; visualDescription: string; backstory: string } }>(quickstartData)
+    const profile = unwrapApiData<{ profile?: { name: string; personality: string; visualDescription: string; visualDescriptions?: string[]; backstory: string } }>(quickstartData)
+    const profileData = profile?.profile
 
     return {
       ...base,
-      characterProfile: profile?.profile || {
-        name: '',
-        personality: '',
-        visualDescription: '',
-        backstory: '',
+      characterProfile: {
+        name: profileData?.name || '',
+        personality: profileData?.personality || '',
+        visualDescription: profileData?.visualDescription || '',
+        backstory: profileData?.backstory || '',
+        ...(profileData?.visualDescriptions && {
+          visualDescriptions: profileData.visualDescriptions,
+        }),
       },
       ...(ctx.selectedModel && { model: ctx.selectedModel }),
       count: ctx.config.batchSize || 4,

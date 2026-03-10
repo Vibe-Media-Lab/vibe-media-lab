@@ -51,6 +51,7 @@ export const MainVisualRequestSchema = z.object({
     name: z.string().max(200),
     personality: z.string().max(2000),
     visualDescription: z.string().max(2000),
+    visualDescriptions: z.array(z.string().max(2000)).max(4).optional(),
     backstory: z.string().max(2000),
   }),
   model: z.enum(CHARACTER_T2I_MODELS).optional(),
@@ -80,6 +81,7 @@ export interface CharacterProfile {
   name: string
   personality: string
   visualDescription: string
+  visualDescriptions?: string[]
   backstory: string
   archetype: string
 }

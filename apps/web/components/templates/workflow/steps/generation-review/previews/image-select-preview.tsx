@@ -17,6 +17,7 @@ interface ImageSelectData {
   images?: Array<{ id: string; url: string; prompt?: string; status?: 'completed' | 'failed' }>
   selectedImageId?: string
   selectedImageUrl?: string
+  selectedVisualDescription?: string
 }
 
 export function ImageSelectPreview({
@@ -48,6 +49,7 @@ export function ImageSelectPreview({
       ...response,
       selectedImageId: imageId,
       selectedImageUrl: image.url,
+      selectedVisualDescription: image.prompt || '',
     })
   }
 

@@ -12,12 +12,18 @@ Given a character archetype or description, create a detailed character profile.
 Respond in JSON format with the following fields:
 - name: A creative character name (Korean-friendly)
 - personality: 2-3 sentences describing personality traits
-- visualDescription: Detailed visual description in English for image generation (appearance, clothing, colors, style)
+- visualDescriptions: Array of exactly 4 distinct visual design variations in English.
+  Each must describe the SAME character but with DIFFERENT design interpretations:
+  different color palettes, clothing styles, accessories, or art style nuances.
+  IMPORTANT: Describe ONLY the character (appearance, clothing, accessories, colors, art style).
+  Do NOT include any background, environment, scene, or setting descriptions.
+  All variations should be full-body, front-facing character descriptions suitable for image generation.
+- visualDescription: Set this to the first element of visualDescriptions.
 - backstory: 2-3 sentences of character backstory
 - archetype: The original archetype or "freetext"
 
 Make the character vivid, memorable, and suitable for animation.
-The visualDescription should be in English and very detailed for image generation.`
+Each visualDescription variation should be detailed for image generation (appearance, clothing, colors, style).`
 
 export function buildQuickstartPrompt(archetype: string, freeText?: string): string {
   if (archetype === 'freetext' && freeText) {
@@ -42,7 +48,8 @@ Color palette suggestions: ${preset.colorSuggestions.join(', ')}
 Personality direction: ${preset.personalityHint}
 Style keywords: ${preset.promptKeywords.join(', ')}
 
-Make the character unique and memorable. The visualDescription should expand on the base appearance with detailed clothing, accessories, and distinctive features.`
+Use these 4 color palette hints as seeds for each design variation: ${preset.colorSuggestions.join(', ')}
+Make the character unique and memorable. Each visualDescription variation should expand on the base appearance with detailed clothing, accessories, and distinctive features, while having a clearly distinct design direction.`
 }
 
 export const POST = createApiHandler<QuickstartResponse>(
@@ -58,6 +65,21 @@ export const POST = createApiHandler<QuickstartResponse>(
 
     // archetype 필드 보정
     profile.archetype = validated.archetype
+
+    // visualDescriptions: 정확히 4개 강제
+    if (!profile.visualDescriptions || profile.visualDescriptions.length < 4) {
+      const base = profile.visualDescription || profile.visualDescriptions?.[0] || ''
+      const padded = [
+        base,
+        `${base}, with warmer color palette and softer lighting`,
+        `${base}, with cooler tones and higher contrast`,
+        `${base}, with minimalist design and clean lines`,
+      ]
+      const existing = profile.visualDescriptions || [base]
+      profile.visualDescriptions = Array.from({ length: 4 }, (_, i) => existing[i] || padded[i] || base)
+    }
+    profile.visualDescriptions = profile.visualDescriptions.slice(0, 4)
+    profile.visualDescription = profile.visualDescriptions[0]!
 
     return {
       sessionId: validated.sessionId,

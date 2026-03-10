@@ -35,14 +35,35 @@ export function CharacterQuickstartPreview({
   const handleFieldChange = (field: keyof CharacterProfile, value: string) => {
     if (!onEdit) return
     const updatedProfile = { ...profile, [field]: value }
+    // visualDescription 변경 시 visualDescriptions[0]도 동기화
+    if (field === 'visualDescription' && updatedProfile.visualDescriptions?.length) {
+      updatedProfile.visualDescriptions = [value, ...updatedProfile.visualDescriptions.slice(1)]
+    }
     const updatedData = { ...response, profile: updatedProfile }
     onEdit(updatedData)
   }
 
+  const handleDescriptionChange = (index: number, value: string) => {
+    if (!onEdit || !profile.visualDescriptions) return
+    const updated = [...profile.visualDescriptions]
+    updated[index] = value
+    const updatedProfile = {
+      ...profile,
+      visualDescriptions: updated,
+      visualDescription: updated[0] || profile.visualDescription,
+    }
+    const updatedData = { ...response, profile: updatedProfile }
+    onEdit(updatedData)
+  }
+
+  const hasMultipleDescriptions = profile.visualDescriptions && profile.visualDescriptions.length > 1
+
   const fields: Array<{ key: keyof CharacterProfile; label: string; rows: number }> = [
     { key: 'name', label: '이름', rows: 1 },
     { key: 'personality', label: '성격', rows: 2 },
-    { key: 'visualDescription', label: '외형 설명 (영문)', rows: 3 },
+    ...(!hasMultipleDescriptions
+      ? [{ key: 'visualDescription' as keyof CharacterProfile, label: '외형 설명 (영문)', rows: 3 }]
+      : []),
     { key: 'backstory', label: '배경 스토리', rows: 2 },
   ]
 
@@ -74,6 +95,34 @@ export function CharacterQuickstartPreview({
             )}
           </div>
         ))}
+
+        {hasMultipleDescriptions && (
+          <div className="space-y-2">
+            <Label className="text-xs text-white/50">디자인 변형 (영문, 4종)</Label>
+            {profile.visualDescriptions!.map((desc, i) => (
+              <div key={i} className="space-y-0.5">
+                <span className="text-[10px] text-white/30">#{i + 1}</span>
+                {editable ? (
+                  <textarea
+                    value={desc}
+                    onChange={(e) => handleDescriptionChange(i, e.target.value)}
+                    rows={2}
+                    maxLength={2000}
+                    className={cn(
+                      'w-full resize-none rounded-lg border border-white/20 bg-white/5 p-2.5',
+                      'text-sm text-white placeholder:text-white/30',
+                      'focus:border-[var(--color-neon-cyan)] focus:outline-none focus:ring-1 focus:ring-[var(--color-neon-cyan)]'
+                    )}
+                  />
+                ) : (
+                  <div className="rounded-lg bg-white/5 p-2.5 text-sm text-white/80">
+                    {desc || '-'}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {profile.archetype && (

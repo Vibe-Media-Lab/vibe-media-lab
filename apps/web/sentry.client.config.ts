@@ -29,6 +29,7 @@ Sentry.init({
       'UNAUTHORIZED',
       'RATE_LIMITED',
       'VALIDATION_ERROR',
+      'The play() request was interrupted',
     ]
 
     if (ignoredPatterns.some((pattern) => message.includes(pattern))) {

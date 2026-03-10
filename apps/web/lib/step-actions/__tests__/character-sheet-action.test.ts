@@ -24,6 +24,12 @@ function mockContext(overrides?: Partial<StepActionContext>): StepActionContext 
               name: '아라곤',
               personality: '용감한 전사',
               visualDescription: 'A brave warrior with silver armor',
+              visualDescriptions: [
+                'A brave warrior with silver armor',
+                'A brave warrior with warm golden armor and red cape',
+                'A brave warrior with cool blue steel armor',
+                'A brave warrior with minimalist white armor',
+              ],
               backstory: '전사 배경',
               archetype: 'warrior',
             },
@@ -42,6 +48,7 @@ function mockContext(overrides?: Partial<StepActionContext>): StepActionContext 
             ],
             selectedImageId: 'portrait-1',
             selectedImageUrl: 'https://example.com/1.png',
+            selectedVisualDescription: 'A brave warrior with silver armor',
           },
         },
         generatedAt: new Date(),
@@ -134,6 +141,67 @@ describe('characterSheetAction', () => {
       const body = action.buildRequestBody(ctx)
 
       expect(body.model).toBe('fal-ai/nano-banana-pro/edit')
+    })
+
+    it('uses selectedVisualDescription snapshot from main-visual', () => {
+      const ctx = mockContext()
+      const body = action.buildRequestBody(ctx)
+      const profile = body.characterProfile as Record<string, string>
+      expect(profile.visualDescription).toBe('A brave warrior with silver armor')
+    })
+
+    it('falls back to quickstart visualDescription when snapshot is missing', () => {
+      const ctx = mockContext({
+        inputContext: {
+          ...mockContext().inputContext,
+          'main-visual': {
+            data: {
+              success: true,
+              data: {
+                sessionId: 'test-session',
+                images: [
+                  { id: 'portrait-1', url: 'https://example.com/1.png' },
+                  { id: 'portrait-2', url: 'https://example.com/2.png' },
+                ],
+                selectedImageId: 'portrait-1',
+                selectedImageUrl: 'https://example.com/1.png',
+                // selectedVisualDescription 없음 (하위 호환)
+              },
+            },
+            generatedAt: new Date(),
+          },
+        },
+      })
+      const body = action.buildRequestBody(ctx)
+      const profile = body.characterProfile as Record<string, string>
+      expect(profile.visualDescription).toBe('A brave warrior with silver armor')
+    })
+
+    it('passes description of selected portrait, not first', () => {
+      const ctx = mockContext({
+        inputContext: {
+          ...mockContext().inputContext,
+          'main-visual': {
+            data: {
+              success: true,
+              data: {
+                sessionId: 'test-session',
+                images: [
+                  { id: 'portrait-1', url: 'https://example.com/1.png', prompt: 'desc1' },
+                  { id: 'portrait-2', url: 'https://example.com/2.png', prompt: 'desc2' },
+                ],
+                selectedImageId: 'portrait-2',
+                selectedImageUrl: 'https://example.com/2.png',
+                selectedVisualDescription: 'A brave warrior with warm golden armor and red cape',
+              },
+            },
+            generatedAt: new Date(),
+          },
+        },
+      })
+      const body = action.buildRequestBody(ctx)
+      const profile = body.characterProfile as Record<string, string>
+      expect(profile.visualDescription).toBe('A brave warrior with warm golden armor and red cape')
     })
   })
 

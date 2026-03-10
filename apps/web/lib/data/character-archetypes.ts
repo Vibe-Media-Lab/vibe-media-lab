@@ -17,7 +17,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   {
     id: 'bright-3d-boy',
     label: '생동감 3D · 밝은 남자아이',
-    thumbnailUrl: '/archetypes/bright-3d-boy.svg',
+    thumbnailUrl: '/archetypes/bright-3d-boy.png',
     preset: {
       visualStyle: 'bright-3d',
       visualDescription: 'Cheerful boy character with big expressive eyes, round face, soft 3D rendering with warm lighting',
@@ -29,7 +29,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   {
     id: 'watercolor-fantasy-witch',
     label: '수채 판타지 · 마법사 소녀',
-    thumbnailUrl: '/archetypes/watercolor-fantasy-witch.svg',
+    thumbnailUrl: '/archetypes/watercolor-fantasy-witch.png',
     preset: {
       visualStyle: 'watercolor-fantasy',
       visualDescription: 'Magical girl character with flowing hair, mystical aura, soft watercolor textures and ethereal atmosphere',
@@ -41,7 +41,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   {
     id: 'round-mascot-animal',
     label: '라운드 마스코트 · 동물 캐릭터',
-    thumbnailUrl: '/archetypes/round-mascot-animal.svg',
+    thumbnailUrl: '/archetypes/round-mascot-animal.png',
     preset: {
       visualStyle: 'round-mascot',
       visualDescription: 'Adorable round animal mascot with simple features, pastel colors, minimal details, kawaii proportions',
@@ -53,7 +53,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   {
     id: 'dark-mood-mystery',
     label: '다크 무드 · 미스터리 남자',
-    thumbnailUrl: '/archetypes/dark-mood-mystery.svg',
+    thumbnailUrl: '/archetypes/dark-mood-mystery.png',
     preset: {
       visualStyle: 'dark-mood',
       visualDescription: 'Mysterious male character with sharp features, dramatic lighting, dark clothing, intense gaze',
@@ -65,7 +65,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   {
     id: 'mini-fairy',
     label: '미니 캐릭터 · 귀여운 요정',
-    thumbnailUrl: '/archetypes/mini-fairy.svg',
+    thumbnailUrl: '/archetypes/mini-fairy.png',
     preset: {
       visualStyle: 'mini-chibi',
       visualDescription: 'Tiny fairy character with oversized head, sparkly wings, cute chibi proportions, glowing particles',
@@ -77,7 +77,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   {
     id: 'webtoon-hip-teen',
     label: '한국 웹툰 · 힙한 10대',
-    thumbnailUrl: '/archetypes/webtoon-hip-teen.svg',
+    thumbnailUrl: '/archetypes/webtoon-hip-teen.png',
     preset: {
       visualStyle: 'webtoon-modern',
       visualDescription: 'Stylish Korean teen character with trendy outfit, clean line art, modern webtoon aesthetic, expressive face',
@@ -89,7 +89,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   {
     id: 'watercolor-emotional-girl',
     label: '감성 수채화 · 소녀',
-    thumbnailUrl: '/archetypes/watercolor-emotional-girl.svg',
+    thumbnailUrl: '/archetypes/watercolor-emotional-girl.png',
     preset: {
       visualStyle: 'watercolor-emotional',
       visualDescription: 'Dreamy girl character with soft features, flowing hair, watercolor wash backgrounds, emotional lighting',
@@ -101,7 +101,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   {
     id: 'mecha-sf-ai',
     label: '메카 SF · AI 어시스턴트',
-    thumbnailUrl: '/archetypes/mecha-sf-ai.svg',
+    thumbnailUrl: '/archetypes/mecha-sf-ai.png',
     preset: {
       visualStyle: 'mecha-sf',
       visualDescription: 'Futuristic AI assistant character with sleek armor, holographic elements, neon accents, cyberpunk aesthetic',
@@ -113,7 +113,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   {
     id: 'eastern-traditional-hanbok',
     label: '동양 전통 · 한복 캐릭터',
-    thumbnailUrl: '/archetypes/eastern-traditional-hanbok.svg',
+    thumbnailUrl: '/archetypes/eastern-traditional-hanbok.png',
     preset: {
       visualStyle: 'eastern-traditional',
       visualDescription: 'Character in traditional Korean hanbok, elegant pose, traditional patterns, ink wash background elements',

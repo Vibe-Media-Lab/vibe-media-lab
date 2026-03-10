@@ -9,24 +9,22 @@ import { getLogger } from '@/lib/logger'
 
 const logger = getLogger('character/main-visual')
 
+function buildPortraitPrompt(visualDescription: string): string {
+  return `Full-body character illustration: ${visualDescription}. Front-facing, full body from head to toe, centered composition, plain white background, no environment, no props, high quality detailed character design.`
+}
+
 function buildPortraitPrompts(
-  profile: { name: string; personality: string; visualDescription: string; backstory: string },
+  profile: { name: string; personality: string; visualDescription: string; visualDescriptions?: string[]; backstory: string },
   count: number,
 ): string[] {
-  const basePrompt = `Character portrait: ${profile.visualDescription}. Personality: ${profile.personality}. High quality, detailed character illustration, centered composition, clean background.`
-
-  const variations = [
-    `${basePrompt} Neutral expression, front-facing portrait.`,
-    `${basePrompt} Confident pose, slight smile, dynamic angle.`,
-    `${basePrompt} Three-quarter view, thoughtful expression.`,
-    `${basePrompt} Action-ready pose, determined look, dramatic lighting.`,
-    `${basePrompt} Relaxed pose, friendly expression, warm lighting.`,
-    `${basePrompt} Profile view, contemplative mood, atmospheric.`,
-    `${basePrompt} Close-up portrait, intense gaze, detailed features.`,
-    `${basePrompt} Full body, signature pose, character essence.`,
-  ]
-
-  return variations.slice(0, count)
+  // visualDescriptions 배열이 있으면 각 변형별 정면 고정 초상화
+  if (profile.visualDescriptions?.length) {
+    return profile.visualDescriptions.slice(0, count).map(buildPortraitPrompt)
+  }
+  // fallback: 단수 visualDescription으로 count만큼 생성
+  return Array.from({ length: count }, () =>
+    buildPortraitPrompt(profile.visualDescription)
+  )
 }
 
 export const POST = createApiHandler<MainVisualResponse>(
@@ -36,14 +34,12 @@ export const POST = createApiHandler<MainVisualResponse>(
 
     const { sessionId, projectId, characterProfile, model, count, regenerateIndex } = validated
     const routeOverrides = buildRouteOverrides('character-creator', 'main-visual', 'text-to-image')
-    const prompts = buildPortraitPrompts(characterProfile, count)
 
     // 단일 항목 재생성 모드
     if (regenerateIndex !== undefined) {
-      const prompt = prompts[regenerateIndex]
-      if (!prompt) {
-        throw new Error(`유효하지 않은 인덱스: ${regenerateIndex}`)
-      }
+      // 재생성 시에도 해당 인덱스의 description 사용
+      const desc = characterProfile.visualDescriptions?.[regenerateIndex] || characterProfile.visualDescription
+      const prompt = buildPortraitPrompt(desc)
 
       logger.debug('Regenerating single portrait', { regenerateIndex, model })
 
@@ -73,6 +69,7 @@ export const POST = createApiHandler<MainVisualResponse>(
     }
 
     // 전체 생성 모드
+    const prompts = buildPortraitPrompts(characterProfile, count)
     logger.debug('Starting portrait generation', {
       count: prompts.length,
       model,
