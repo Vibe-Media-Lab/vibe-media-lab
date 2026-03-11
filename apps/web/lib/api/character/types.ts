@@ -38,6 +38,7 @@ export const QuickstartRequestSchema = z.object({
   sessionId: z.string(),
   archetype: z.enum(ARCHETYPE_IDS),
   freeText: z.string().max(500).optional(),
+  params: z.record(z.string().max(50), z.string().max(100)).optional(),
 }).refine(
   (d) => d.archetype !== 'freetext' || (d.freeText && d.freeText.trim().length > 0),
   { message: '자유 입력 모드에서는 캐릭터 설명을 입력해주세요', path: ['freeText'] }
@@ -89,6 +90,7 @@ export interface CharacterProfile {
 export interface QuickstartResponse {
   sessionId: string
   profile: CharacterProfile
+  appliedParams?: Record<string, string>
 }
 
 export interface MainVisualResponse {
@@ -115,6 +117,7 @@ export { unwrapStepResult, unwrapApiData } from '@/lib/workflow/helpers'
 export interface CharacterArchetypeData {
   archetype: string
   freeText?: string
+  params?: Record<string, string>
 }
 
 export interface CharacterCreatorContext {

@@ -17,6 +17,7 @@ const quickstartAction: StepAction = {
       ...base,
       archetype: archData?.archetype || '',
       freeText: archData?.freeText,
+      params: archData?.params,
     }
   },
 

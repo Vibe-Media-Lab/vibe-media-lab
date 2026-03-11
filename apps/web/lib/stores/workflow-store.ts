@@ -3,6 +3,7 @@ import type { WorkflowStep, MediaType, GenerationReviewStepConfig } from '@vibe-
 import type { ModelCapability } from '@/lib/models/types'
 import { ENABLED } from '@/lib/models/enabled'
 import { getStepPolicy } from '@/lib/models/workflow-policies'
+import { getDefaultParams } from '@/lib/data/character-archetypes'
 
 export type WorkflowStatus = 'idle' | 'in_progress' | 'generating' | 'completed' | 'failed'
 
@@ -381,8 +382,18 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>((set, ge
       ? migrateModelSelections(savedSelections, templateId ?? undefined)
       : {}
 
+    // archetype stepData에 params 없으면 기본값 보정
+    const stepData = { ...(projectData.stepData || {}) }
+    const archData = stepData.archetype as { archetype?: string; params?: Record<string, string> } | undefined
+    if (archData?.archetype && (!archData.params || Object.keys(archData.params).length === 0)) {
+      const defaults = getDefaultParams(archData.archetype)
+      if (Object.keys(defaults).length > 0) {
+        stepData.archetype = { ...archData, params: defaults }
+      }
+    }
+
     set({
-      stepData: projectData.stepData || {},
+      stepData,
       currentStepIndex: projectData.currentStepIndex || 0,
       outputUrl: projectData.outputUrl,
       status: mappedStatus as WorkflowStatus,

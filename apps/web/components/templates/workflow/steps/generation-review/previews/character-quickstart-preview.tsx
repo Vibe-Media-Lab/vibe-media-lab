@@ -4,6 +4,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
 import { unwrapApiData } from '@/lib/workflow/helpers'
+import { CHARACTER_ARCHETYPES } from '@/lib/data/character-archetypes'
 import type { CharacterProfile } from '@/lib/api/character/types'
 
 interface CharacterQuickstartPreviewProps {
@@ -14,6 +15,17 @@ interface CharacterQuickstartPreviewProps {
 
 interface ProfileData {
   profile?: CharacterProfile
+  appliedParams?: Record<string, string>
+}
+
+function formatParamLabel(paramId: string, value: string): string {
+  for (const arch of CHARACTER_ARCHETYPES) {
+    const param = arch.parameters?.find((p) => p.id === paramId)
+    if (!param) continue
+    const option = param.options.find((o) => o.value === value)
+    return `${param.label}: ${option?.label || value}`
+  }
+  return `${paramId}: ${value}`
 }
 
 export function CharacterQuickstartPreview({
@@ -23,6 +35,7 @@ export function CharacterQuickstartPreview({
 }: CharacterQuickstartPreviewProps) {
   const response = unwrapApiData<ProfileData>(data)
   const profile = response?.profile
+  const appliedParams = response?.appliedParams
 
   if (!profile) {
     return (
@@ -126,11 +139,22 @@ export function CharacterQuickstartPreview({
       </div>
 
       {profile.archetype && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-white/40">아키타입:</span>
           <span className="rounded-full bg-[var(--color-neon-cyan)]/10 px-2 py-0.5 text-xs text-[var(--color-neon-cyan)]">
             {profile.archetype}
           </span>
+        </div>
+      )}
+
+      {appliedParams && Object.keys(appliedParams).length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-white/40">적용 설정:</span>
+          {Object.entries(appliedParams).map(([key, val]) => (
+            <span key={key} className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/50">
+              {formatParamLabel(key, val)}
+            </span>
+          ))}
         </div>
       )}
     </div>

@@ -3,13 +3,17 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
-import { CHARACTER_ARCHETYPES } from '@/lib/data/character-archetypes'
+import {
+  CHARACTER_ARCHETYPES,
+  getDisabledOptions,
+  type ArchetypeParam,
+} from '@/lib/data/character-archetypes'
 import type { ArchetypeSelectStepConfig } from '@vibe-media-lab/shared'
 
 interface ArchetypeSelectStepProps {
   stepId: string
   config: ArchetypeSelectStepConfig
-  value: { archetype: string; freeText?: string } | null
+  value: { archetype: string; freeText?: string; params?: Record<string, string> } | null
   onChange: (value: unknown) => void
 }
 
@@ -50,11 +54,35 @@ export function ArchetypeSelectStep({
   const freeText = value?.freeText || ''
   const maxFreeTextLength = config.maxFreeTextLength || 500
   const freeTextPlaceholder = config.freeTextPlaceholder || '캐릭터를 직접 설명해주세요'
+  const [showAdvanced, setShowAdvanced] = React.useState(false)
 
   const handleSelect = (archetypeId: string) => {
+    // 같은 아키타입 재클릭 → 기존 params/freeText 보존
+    if (archetypeId === selectedArchetype) return
+
+    // 다른 아키타입으로 변경 → 해당 아키타입의 기본값으로 초기화
+    const arch = CHARACTER_ARCHETYPES.find((a) => a.id === archetypeId)
+    const defaultParams: Record<string, string> = {}
+    if (arch?.parameters) {
+      for (const p of arch.parameters) {
+        defaultParams[p.id] = p.defaultValue
+      }
+    }
+
     onChange({
       archetype: archetypeId,
-      freeText: freeText || undefined,
+      freeText: archetypeId === 'freetext' ? (value?.freeText || undefined) : undefined,
+      params: Object.keys(defaultParams).length > 0 ? defaultParams : undefined,
+    })
+    setShowAdvanced(false)
+  }
+
+  const handleParamChange = (paramId: string, newValue: string) => {
+    const updatedParams = { ...(value?.params || {}), [paramId]: newValue }
+    onChange({
+      archetype: selectedArchetype,
+      freeText: selectedArchetype === 'freetext' ? freeText : undefined,
+      params: updatedParams,
     })
   }
 
@@ -62,6 +90,7 @@ export function ArchetypeSelectStep({
     onChange({
       archetype: 'freetext',
       freeText: text,
+      params: value?.params,
     })
   }
 
@@ -95,6 +124,45 @@ export function ArchetypeSelectStep({
       ) as HTMLElement
       nextElement?.focus()
     }
+  }
+
+  const selectedArch = CHARACTER_ARCHETYPES.find((a) => a.id === selectedArchetype)
+  const primaryParams = (selectedArch?.parameters || []).filter((p) => p.priority === 'primary')
+  const advancedParams = (selectedArch?.parameters || []).filter((p) => p.priority === 'advanced')
+  const currentParams = value?.params || {}
+
+  function renderParamChips(param: ArchetypeParam) {
+    const disabledSet = getDisabledOptions(selectedArchetype, param.id, currentParams)
+
+    return (
+      <div key={param.id} className="space-y-1.5">
+        <span className="text-sm font-medium text-white/70">{param.label}</span>
+        <div className="flex flex-wrap gap-2">
+          {param.options.map((opt) => {
+            const isActive = currentParams[param.id] === opt.value
+            const isDisabled = disabledSet.has(opt.value)
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={isDisabled}
+                onClick={() => handleParamChange(param.id, opt.value)}
+                className={cn(
+                  'rounded-full px-3 py-1.5 text-sm font-medium transition-all',
+                  isDisabled && 'cursor-not-allowed opacity-30',
+                  isActive
+                    ? 'bg-[var(--color-neon-cyan)] text-black'
+                    : 'bg-white/10 text-white/70 hover:bg-white/20',
+                )}
+                title={isDisabled ? '이 조합은 사용할 수 없습니다' : undefined}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -142,6 +210,28 @@ export function ArchetypeSelectStep({
           )
         })}
       </div>
+
+      {/* 파라미터 패널 */}
+      {selectedArch?.parameters && selectedArch.parameters.length > 0 && (
+        <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+          {/* primary 칩 */}
+          {primaryParams.map(renderParamChips)}
+
+          {/* advanced 토글 */}
+          {advancedParams.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((prev) => !prev)}
+                className="text-sm text-white/50 hover:text-white/70 transition-colors"
+              >
+                {showAdvanced ? '접기' : '더보기'}
+              </button>
+              {showAdvanced && advancedParams.map(renderParamChips)}
+            </>
+          )}
+        </div>
+      )}
 
       {selectedArchetype === 'freetext' && (
         <div className="space-y-2">

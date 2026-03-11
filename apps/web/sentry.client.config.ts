@@ -17,7 +17,13 @@ Sentry.init({
 
   // 예상된 에러 필터링 (Sentry 이벤트 절약)
   beforeSend(event) {
+    const errorType = event.exception?.values?.[0]?.type || ''
     const message = event.exception?.values?.[0]?.value || ''
+
+    // AbortError: fetch abort (컴포넌트 언마운트, StrictMode 등) — 정상 동작
+    if (errorType === 'AbortError') {
+      return null
+    }
 
     // 크레딧 부족, 사용자 입력 오류 등 비즈니스 에러는 Sentry에 보내지 않음
     const ignoredPatterns = [
