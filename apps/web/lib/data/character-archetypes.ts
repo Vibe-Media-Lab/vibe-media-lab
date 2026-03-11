@@ -116,7 +116,7 @@ export function getDisabledOptions(
 export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   {
     id: 'bright-3d-boy',
-    label: '생동감 3D',
+    label: '3D 애니메이션',
     thumbnailUrl: '/archetypes/bright-3d-boy.png',
     preset: {
       visualStyle: 'bright-3d',
@@ -129,7 +129,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   },
   {
     id: 'watercolor-fantasy-witch',
-    label: '수채 판타지 · 마법사',
+    label: '판타지(수채화)',
     thumbnailUrl: '/archetypes/watercolor-fantasy-witch.png',
     preset: {
       visualStyle: 'watercolor-fantasy',
@@ -142,7 +142,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   },
   {
     id: 'round-mascot-animal',
-    label: '라운드 마스코트',
+    label: '동물 캐릭터',
     thumbnailUrl: '/archetypes/round-mascot-animal.png',
     preset: {
       visualStyle: 'round-mascot',
@@ -165,7 +165,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   },
   {
     id: 'dark-mood-mystery',
-    label: '다크 무드 · 미스터리',
+    label: '다크 히어로',
     thumbnailUrl: '/archetypes/dark-mood-mystery.png',
     preset: {
       visualStyle: 'dark-mood',
@@ -178,7 +178,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   },
   {
     id: 'mini-fairy',
-    label: '미니 캐릭터 · 요정',
+    label: '미니 요정',
     thumbnailUrl: '/archetypes/mini-fairy.png',
     preset: {
       visualStyle: 'mini-chibi',
@@ -203,7 +203,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   },
   {
     id: 'webtoon-hip-teen',
-    label: '한국 웹툰 · 10대',
+    label: '웹툰',
     thumbnailUrl: '/archetypes/webtoon-hip-teen.png',
     preset: {
       visualStyle: 'webtoon-modern',
@@ -228,7 +228,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   },
   {
     id: 'watercolor-emotional-girl',
-    label: '감성 수채화',
+    label: '감성(수채화)',
     thumbnailUrl: '/archetypes/watercolor-emotional-girl.png',
     preset: {
       visualStyle: 'watercolor-emotional',
@@ -241,7 +241,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   },
   {
     id: 'mecha-sf-ai',
-    label: '메카 SF',
+    label: 'SF',
     thumbnailUrl: '/archetypes/mecha-sf-ai.png',
     preset: {
       visualStyle: 'mecha-sf',
@@ -273,7 +273,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   },
   {
     id: 'eastern-traditional-hanbok',
-    label: '동양 전통 · 한복',
+    label: '한복',
     thumbnailUrl: '/archetypes/eastern-traditional-hanbok.png',
     preset: {
       visualStyle: 'eastern-traditional',
@@ -298,7 +298,7 @@ export const CHARACTER_ARCHETYPES: CharacterArchetype[] = [
   },
   {
     id: 'freetext',
-    label: '직접 설명하기',
+    label: '커스텀',
     thumbnailUrl: '/archetypes/freetext.png',
     preset: {
       visualStyle: '',
