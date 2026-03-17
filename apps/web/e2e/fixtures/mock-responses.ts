@@ -26,6 +26,10 @@ export const MOCK_QUICKSTART = {
       backstory: '오래전 잃어버린 왕국의 후예. 세상을 구하기 위해 모험을 떠났다.',
       archetype: 'bright-3d-boy',
     },
+    styleHint: {
+      visualStyle: 'bright-3d',
+      promptKeywords: ['Pixar 3D animation style', 'Disney 3D rendering', 'bright colors', 'soft lighting', 'expressive eyes', 'round features'],
+    },
   },
 }
 

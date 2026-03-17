@@ -3,10 +3,12 @@ import { editImage } from '@/lib/services'
 import {
   CharacterSheetRequestSchema,
   type CharacterSheetResponse,
+  type StyleHint,
 } from '@/lib/api/character/types'
 import { buildRouteOverrides } from '@/lib/models/helpers'
 import type { RouteOverrides } from '@/lib/models/router'
 import { validateFetchUrl } from '@/lib/security/validate-url'
+import { buildStyledSheetPrompt } from '@/lib/prompts/character-prompt-builder'
 import { getLogger } from '@/lib/logger'
 
 const logger = getLogger('character/character-sheet')
@@ -20,9 +22,9 @@ const VARIATIONS = [
 
 function generateSheet(
   variation: typeof VARIATIONS[number],
-  params: { selectedImageUrl: string; characterProfile: { visualDescription: string }; model?: string; routeOverrides: RouteOverrides | undefined; userId: string; projectId?: string; sessionId: string },
+  params: { selectedImageUrl: string; characterProfile: { visualDescription: string }; styleHint?: StyleHint; model?: string; routeOverrides: RouteOverrides | undefined; userId: string; projectId?: string; sessionId: string },
 ) {
-  const editPrompt = `${variation.prompt}. Character: ${params.characterProfile.visualDescription}. Keep the same character design, colors, and style. 1:1 aspect ratio, clean background.`
+  const editPrompt = buildStyledSheetPrompt(variation, params.characterProfile.visualDescription, params.styleHint)
 
   return editImage({
     prompt: editPrompt,
@@ -50,7 +52,7 @@ export const POST = createApiHandler<CharacterSheetResponse>(
     const body = await request.json()
     const validated = CharacterSheetRequestSchema.parse(body)
 
-    const { sessionId, projectId, selectedImageUrl, characterProfile, model, regenerateVariationId } = validated
+    const { sessionId, projectId, selectedImageUrl, characterProfile, model, styleHint, regenerateVariationId } = validated
 
     validateFetchUrl(selectedImageUrl, { endpoint: '/api/character/character-sheet', userId: user.id })
 
@@ -59,6 +61,7 @@ export const POST = createApiHandler<CharacterSheetResponse>(
     const sheetParams = {
       selectedImageUrl,
       characterProfile,
+      styleHint,
       model,
       routeOverrides,
       userId: user.id,

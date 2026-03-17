@@ -17,8 +17,11 @@ const mainVisualAction: StepAction = {
     const base = buildCharacterBaseRequest(ctx)
     const charCtx = asCharacterContext(ctx.inputContext)
     const quickstartData = unwrapStepResult(charCtx.quickstart)
-    const profile = unwrapApiData<{ profile?: { name: string; personality: string; visualDescription: string; visualDescriptions?: string[]; backstory: string } }>(quickstartData)
-    const profileData = profile?.profile
+    const quickstartResult = unwrapApiData<{
+      profile?: { name: string; personality: string; visualDescription: string; visualDescriptions?: string[]; backstory: string }
+      styleHint?: { visualStyle: string; promptKeywords: string[] }
+    }>(quickstartData)
+    const profileData = quickstartResult?.profile
 
     return {
       ...base,
@@ -31,6 +34,7 @@ const mainVisualAction: StepAction = {
           visualDescriptions: profileData.visualDescriptions,
         }),
       },
+      ...(quickstartResult?.styleHint && { styleHint: quickstartResult.styleHint }),
       ...(ctx.selectedModel && { model: ctx.selectedModel }),
       count: ctx.config.batchSize || 4,
     }

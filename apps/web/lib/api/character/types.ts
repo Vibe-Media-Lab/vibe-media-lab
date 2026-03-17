@@ -31,6 +31,20 @@ const CHARACTER_I2I_MODELS = extractModels(
 )
 
 // ============================================================
+// StyleHint (이미지 생성 품질 강화용 아키타입 메타데이터)
+// ============================================================
+
+export const StyleHintBaseSchema = z.object({
+  visualStyle: z.string().max(100),
+  promptKeywords: z.array(z.string().max(200)).max(10),
+})
+
+export type StyleHint = z.infer<typeof StyleHintBaseSchema>
+
+/** Request 필드용 optional wrapper */
+export const StyleHintSchema = StyleHintBaseSchema.optional()
+
+// ============================================================
 // Request Schemas
 // ============================================================
 
@@ -55,6 +69,7 @@ export const MainVisualRequestSchema = z.object({
     visualDescriptions: z.array(z.string().max(2000)).max(4).optional(),
     backstory: z.string().max(2000),
   }),
+  styleHint: StyleHintSchema,
   model: z.enum(CHARACTER_T2I_MODELS).optional(),
   count: z.number().int().min(1).max(8).default(4),
   regenerateIndex: z.number().int().min(0).max(7).optional(),
@@ -69,6 +84,7 @@ export const CharacterSheetRequestSchema = z.object({
     name: z.string().max(200),
     visualDescription: z.string().max(2000),
   }),
+  styleHint: StyleHintSchema,
   model: z.enum(CHARACTER_I2I_MODELS).optional(),
   regenerateVariationId: z.string().optional(),
 })
@@ -91,6 +107,7 @@ export interface QuickstartResponse {
   sessionId: string
   profile: CharacterProfile
   appliedParams?: Record<string, string>
+  styleHint?: StyleHint
 }
 
 export interface MainVisualResponse {

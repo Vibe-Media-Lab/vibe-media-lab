@@ -27,6 +27,10 @@ function mockContext(overrides?: Partial<StepActionContext>): StepActionContext 
               backstory: '전사 배경',
               archetype: 'warrior',
             },
+            styleHint: {
+              visualStyle: 'bright-3d',
+              promptKeywords: ['Pixar 3D animation style'],
+            },
           },
         },
         generatedAt: new Date(),

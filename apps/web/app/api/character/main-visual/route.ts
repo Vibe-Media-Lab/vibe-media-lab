@@ -5,41 +5,23 @@ import {
   type MainVisualResponse,
 } from '@/lib/api/character/types'
 import { buildRouteOverrides } from '@/lib/models/helpers'
+import { buildStyledPortraitPrompt, buildPortraitPrompts } from '@/lib/prompts/character-prompt-builder'
 import { getLogger } from '@/lib/logger'
 
 const logger = getLogger('character/main-visual')
-
-function buildPortraitPrompt(visualDescription: string): string {
-  return `Full-body character illustration: ${visualDescription}. Front-facing, full body from head to toe, centered composition, plain white background, no environment, no props, high quality detailed character design.`
-}
-
-function buildPortraitPrompts(
-  profile: { name: string; personality: string; visualDescription: string; visualDescriptions?: string[]; backstory: string },
-  count: number,
-): string[] {
-  // visualDescriptions 배열이 있으면 각 변형별 정면 고정 초상화
-  if (profile.visualDescriptions?.length) {
-    return profile.visualDescriptions.slice(0, count).map(buildPortraitPrompt)
-  }
-  // fallback: 단수 visualDescription으로 count만큼 생성
-  return Array.from({ length: count }, () =>
-    buildPortraitPrompt(profile.visualDescription)
-  )
-}
 
 export const POST = createApiHandler<MainVisualResponse>(
   async (request, { user }) => {
     const body = await request.json()
     const validated = MainVisualRequestSchema.parse(body)
 
-    const { sessionId, projectId, characterProfile, model, count, regenerateIndex } = validated
+    const { sessionId, projectId, characterProfile, model, count, regenerateIndex, styleHint } = validated
     const routeOverrides = buildRouteOverrides('character-creator', 'main-visual', 'text-to-image')
 
     // 단일 항목 재생성 모드
     if (regenerateIndex !== undefined) {
-      // 재생성 시에도 해당 인덱스의 description 사용
       const desc = characterProfile.visualDescriptions?.[regenerateIndex] || characterProfile.visualDescription
-      const prompt = buildPortraitPrompt(desc)
+      const prompt = buildStyledPortraitPrompt(desc, styleHint)
 
       logger.debug('Regenerating single portrait', { regenerateIndex, model })
 
@@ -69,7 +51,7 @@ export const POST = createApiHandler<MainVisualResponse>(
     }
 
     // 전체 생성 모드
-    const prompts = buildPortraitPrompts(characterProfile, count)
+    const prompts = buildPortraitPrompts(characterProfile, count, styleHint)
     logger.debug('Starting portrait generation', {
       count: prompts.length,
       model,

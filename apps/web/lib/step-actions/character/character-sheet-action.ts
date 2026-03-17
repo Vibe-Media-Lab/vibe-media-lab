@@ -32,9 +32,12 @@ const characterSheetAction: StepAction = {
       selectedImageUrl = found?.url || ''
     }
 
-    // quickstart에서 프로필 추출
+    // quickstart에서 프로필 + styleHint 추출
     const quickstartData = unwrapStepResult(charCtx.quickstart)
-    const quickstartResult = unwrapApiData<{ profile?: { name: string; visualDescription: string } }>(quickstartData)
+    const quickstartResult = unwrapApiData<{
+      profile?: { name: string; visualDescription: string }
+      styleHint?: { visualStyle: string; promptKeywords: string[] }
+    }>(quickstartData)
 
     // selectedVisualDescription 스냅샷 우선, fallback: quickstart 단수
     const visualDescription =
@@ -48,6 +51,7 @@ const characterSheetAction: StepAction = {
         name: quickstartResult?.profile?.name || '',
         visualDescription,
       },
+      ...(quickstartResult?.styleHint && { styleHint: quickstartResult.styleHint }),
       ...(ctx.selectedModel && { model: ctx.selectedModel }),
     }
   },

@@ -4,6 +4,7 @@ import {
   QuickstartRequestSchema,
   type QuickstartResponse,
   type CharacterProfile,
+  type StyleHint,
 } from '@/lib/api/character/types'
 import {
   getArchetypeById,
@@ -11,6 +12,7 @@ import {
   getViolatedConstraint,
   type CharacterArchetype,
 } from '@/lib/data/character-archetypes'
+import { buildStyledVariationSuffix } from '@/lib/prompts/character-prompt-builder'
 
 const CHARACTER_SYSTEM_PROMPT = `You are a character designer for animation and games.
 Given a character archetype or description, create a detailed character profile.
@@ -23,6 +25,12 @@ Respond in JSON format with the following fields:
   IMPORTANT: Describe ONLY the character (appearance, clothing, accessories, colors, art style).
   Do NOT include any background, environment, scene, or setting descriptions.
   All variations should be full-body, front-facing character descriptions suitable for image generation.
+  CRITICAL FOR IMAGE GENERATION QUALITY:
+  - Start each description with the art style (e.g., "Pixar 3D animated", "watercolor", "chibi anime")
+  - Include specific material/texture words (e.g., "smooth 3D rendering", "ink wash strokes")
+  - Mention exact colors using descriptive words, not hex codes
+  - Keep each description between 40-80 words for optimal image generation
+  - Preserve the Style keywords provided in the prompt across ALL variations
 - visualDescription: Set this to the first element of visualDescriptions.
 - backstory: 2-3 sentences of character backstory
 - archetype: The original archetype or "freetext"
@@ -164,14 +172,19 @@ export const POST = createApiHandler<QuickstartResponse>(
     // archetype 필드 보정
     profile.archetype = validated.archetype
 
-    // visualDescriptions: 정확히 4개 강제
+    // styleHint 구성 (이미지 생성 단계에 전파)
+    const styleHint: StyleHint | undefined = archetypeData?.preset.visualStyle
+      ? { visualStyle: archetypeData.preset.visualStyle, promptKeywords: archetypeData.preset.promptKeywords }
+      : undefined
+
+    // visualDescriptions: 정확히 4개 강제 (스타일 인지 패딩)
     if (!profile.visualDescriptions || profile.visualDescriptions.length < 4) {
       const base = profile.visualDescription || profile.visualDescriptions?.[0] || ''
       const padded = [
         base,
-        `${base}, with warmer color palette and softer lighting`,
-        `${base}, with cooler tones and higher contrast`,
-        `${base}, with minimalist design and clean lines`,
+        `${base}, ${buildStyledVariationSuffix(1, styleHint)}`,
+        `${base}, ${buildStyledVariationSuffix(2, styleHint)}`,
+        `${base}, ${buildStyledVariationSuffix(3, styleHint)}`,
       ]
       const existing = profile.visualDescriptions || [base]
       profile.visualDescriptions = Array.from({ length: 4 }, (_, i) => existing[i] || padded[i] || base)
@@ -183,6 +196,7 @@ export const POST = createApiHandler<QuickstartResponse>(
       sessionId: validated.sessionId,
       profile,
       appliedParams: Object.keys(effectiveParams).length > 0 ? effectiveParams : undefined,
+      styleHint,
     }
   },
   { rateLimit: { maxRequests: 10, windowMs: 60_000 } }
